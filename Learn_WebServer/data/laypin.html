@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lấy Pin - Trạm Pin ESP32</title>
+    <style>
+        /* --- TOÀN BỘ CSS GỐC CỦA BẠN ĐƯỢC GIỮ NGUYÊN TẠI ĐÂY --- */
+        body {
+            background-color: #f4f4f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding-bottom: 40px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+            padding: 15px 5%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5em;
+            color: #333;
+            margin: 0;
+        }
+        
+        .back-btn {
+            background-color: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .back-btn:hover {
+            background-color: #5a6268;
+        }
+
+        .main-content {
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .instruction-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            padding: 30px;
+            border-top: 6px solid #4CAF50;
+        }
+
+        .instruction-card h2 {
+            margin-top: 0;
+            font-size: 1.8em;
+            color: #333;
+        }
+
+        .instruction-card p {
+            font-size: 1.2em;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .slot-number {
+            font-size: 5em;
+            font-weight: bold;
+            margin: 20px 0;
+            color: #4CAF50;
+        }
+
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Lấy Pin</h1>
+        <a href="dashboard.html" class="back-btn">Quay Lại</a>
+    </div>
+
+    <div class="main-content">
+        <div class="instruction-card">
+            <h2>Mời bạn lấy pin</h2>
+            <p>Vui lòng mở và lấy pin ra khỏi khay có số hiển thị bên dưới.</p>
+            <div class="slot-number" id="pin-slot">...</div>
+        </div>
+    </div>
+
+    <script>
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+
+        // Chạy hàm khởi tạo khi trang được tải xong
+        window.addEventListener('load', initWebSocket);
+
+        function initWebSocket() {
+            console.log('Trying to open a WebSocket connection...');
+            websocket = new WebSocket(gateway);
+            websocket.onopen = onOpen;
+            websocket.onmessage = onMessage;
+            // Thêm onclose để tự động kết nối lại nếu mất mạng
+            websocket.onclose = function(event) {
+                console.log('Connection closed');
+                setTimeout(initWebSocket, 2000); // Thử kết nối lại sau 2 giây
+            };
+        }
+
+        // Khi kết nối thành công, gửi yêu cầu
+        function onOpen(event) {
+            console.log('Connection opened');
+            websocket.send('getPickupSlot');
+        }
+
+        // Khi nhận được tin nhắn từ server
+        function onMessage(event) {
+            console.log('Message from server: ', event.data);
+            var data;
+            try {
+                data = JSON.parse(event.data);
+            } catch(e) {
+                console.error("Error parsing JSON:", e);
+                return;
+            }
+            
+            // Chỉ xử lý tin nhắn có type là 'pickupSlot'
+            if (data.type === 'pickupSlot') {
+                document.getElementById('pin-slot').innerText = data.slot;
+            }
+        }
+    </script>
+</body>
+</html>

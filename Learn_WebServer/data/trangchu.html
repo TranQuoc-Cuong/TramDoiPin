@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trạm trao đổi PIN ESP32</title>
+    <style>
+        body {
+            background-color: #f4f4f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+        }
+
+        /* THAY ĐỔI CHÍNH Ở ĐÂY */
+        .container {
+            width: 90%; 
+            max-width: 800px; /* Giảm max-width một chút cho cân đối */
+            margin: auto;
+            padding: 20px 0;
+            display: grid; /* Chuyển sang Grid */
+            grid-template-columns: repeat(2, 1fr); /* Tạo một lưới có 2 cột bằng nhau */
+            gap: 20px; 
+        }
+
+        .header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center; /* Thêm align-items để căn nút theo chiều dọc */
+            position: relative;
+            padding: 10px 5%;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5em;
+            color: #333;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        
+        h2 {
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        /* Đã đơn giản hóa, bỏ các thuộc tính flex */
+        .card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .card p {
+            font-size: 1.1em;
+            color: #555;
+        }
+
+        .card strong {
+            font-size: 1.2em;
+        }
+
+        .login-btn {
+            background-color: #1a73e8;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            transition: background-color 0.2s;
+        }
+
+        .login-btn:hover {
+            background-color: #1558b3;
+        }
+
+        .status-full { color: #2e7d32; } 
+        .status-charging { color: #1976d2; }
+        .status-low { color: #d32f2f; }
+
+            /* --- Responsive cho màn hình nhỏ (Mobile) --- */
+        @media (max-width: 600px) {
+        .header {
+            flex-direction: column; /* Xếp các phần tử theo chiều dọc */
+            justify-content: center; /* Căn giữa các phần tử */
+            gap: 15px; /* Tạo khoảng cách giữa tiêu đề và nút */
+            padding: 20px;
+        }
+
+        .header h1 {
+            position: static; /* Trả h1 về luồng bình thường, không định vị tuyệt đối nữa */
+            transform: none;  /* Bỏ hiệu ứng transform */
+            font-size: 1.3em; /* Có thể giảm kích thước chữ một chút */
+            text-align: center; /* Đảm bảo chữ vẫn ở giữa */
+        }
+
+        /* Đảm bảo nút không quá rộng trên mobile */
+        .login-btn {
+            width: auto;
+            padding: 10px 30px;
+        }
+        }
+    </style>
+
+</head>
+<body>
+    <div class="header">
+        <h1>TRẠNG THÁI PIN</h1> 
+        <a href="dangnhap.html"><button class="login-btn">Đăng nhập</button> </a>
+    </div>
+
+    <div class="container">
+        <div class="card" id="pin-1">
+            <h2>Pin số 1</h2>
+            <p>Phần trăm pin: <strong class="percent-text status-full">90%</strong></p>
+            <p>Trạng thái: <strong class="status-text status-full">đã đầy</strong></p>
+        </div>
+        <div class="card" id="pin-2">
+            <h2>Pin số 2</h2>
+            <p>Phần trăm pin: <strong class="percent-text status-full">90%</strong></p>
+            <p>Trạng thái: <strong class="status-text status-full">đã đầy</strong></p>
+        </div>
+        <div class="card" id="pin-3">
+            <h2>Pin số 3</h2>
+            <p>Phần trăm pin: <strong class="percent-text status-full">90%</strong></p>
+            <p>Trạng thái: <strong class="status-text status-full">đã đầy</strong></p>
+        </div>
+        <div class="card" id="pin-4">
+            <h2>Pin số 4</h2>
+            <p>Phần trăm pin: <strong class="percent-text status-full">90%</strong></p>
+            <p>Trạng thái: <strong class="status-text status-full">đã đầy</strong></p>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript không thay đổi
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+
+        window.addEventListener('load', initWebSocket);
+
+        function initWebSocket() {
+            console.log('Trying to open a WebSocket connection...');
+            websocket = new WebSocket(gateway);
+            websocket.onopen  = onOpen;
+            websocket.onclose = onClose;
+            websocket.onmessage = onMessage; 
+        }
+
+        function onOpen(event) {
+            console.log('Connection opened');
+        }
+
+        function onClose(event) {
+            console.log('Connection closed');
+            setTimeout(initWebSocket, 2000); 
+        }
+
+        function onMessage(event) {
+            console.log('Message from server: ', event.data);
+            let data;
+            try {
+                data = JSON.parse(event.data);
+            } catch (e) {
+                console.error("Error parsing JSON:", e);
+                return;
+            }
+
+            const cardId = `pin-${data.id}`;
+            const cardElement = document.getElementById(cardId);
+
+            if (cardElement) {
+                const percentElement = cardElement.querySelector('.percent-text');
+                const statusElement = cardElement.querySelector('.status-text');
+
+                percentElement.innerHTML = `${data.percent}%`;
+                statusElement.innerHTML = data.status;
+
+                let statusClass = ''; // Khởi tạo là chuỗi rỗng
+
+                // Ưu tiên kiểm tra trạng thái text trước
+                const statusText = data.status.toLowerCase();
+
+                if (statusText === 'đầy' || statusText === 'đã đầy') {
+                    statusClass = 'status-full';
+                } else if (statusText === 'sạc') {
+                    statusClass = 'status-charging';
+                } else if (data.percent < 20) { // Nếu không phải các trạng thái trên, mới xét %
+                    statusClass = 'status-low';
+                } else {
+                    // Một trạng thái mặc định nếu không rơi vào các trường hợp trên
+                    // Ví dụ: "Trống", "Lỗi",...
+                    statusClass = 'status-charging'; // Hoặc một màu xám nào đó
+                }
+                
+                // Gán lại class, cách làm này vẫn giữ nguyên các class cũ
+                percentElement.className = `percent-text ${statusClass}`;
+                statusElement.className = `status-text ${statusClass}`;
+            } else {
+                console.warn(`Card with id '${cardId}' not found.`);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảng Điều Khiển - Trạm Pin ESP32</title>
+    <style>
+        body {
+            background-color: #f4f4f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+        }
+
+        /* --- Header & User Info --- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+            padding: 15px 5%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .user-info .name {
+            font-size: 1.2em; /* Cho chữ to hơn một chút */
+        }
+
+        .user-info .name strong {
+            color: #1a73e8;
+        }
+        
+        .logout-btn {
+            background-color: #f44336;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .logout-btn:hover {
+            background-color: #da190b;
+        }
+
+        /* --- Main Content --- */
+        .main-content {
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        .main-content h1 {
+            color: #333;
+            margin-bottom: 40px;
+        }
+
+        /* --- Action Menu --- */
+        .action-menu {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            background-color: white;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            width: 200px;
+            padding: 30px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 1.5em;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .action-button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        .action-button.swap { color: #ff9800; }   /* Đổi pin */
+        .action-button.get { color: #4CAF50; }    /* Lấy pin (thay cho Mua pin) */
+
+        /* --- Responsive cho màn hình nhỏ (Mobile) --- */
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column; /* Xếp các phần tử theo chiều dọc */
+                justify-content: center; /* Căn giữa các phần tử */
+                gap: 15px; /* Tạo khoảng cách giữa tiêu đề và nút */
+                padding: 20px;
+            }
+
+            .header h1 {
+                position: static; /* Trả h1 về luồng bình thường, không định vị tuyệt đối nữa */
+                transform: none;  /* Bỏ hiệu ứng transform */
+                font-size: 1.3em; /* Có thể giảm kích thước chữ một chút */
+                text-align: center; /* Đảm bảo chữ vẫn ở giữa */
+            }
+
+            /* Đảm bảo nút không quá rộng trên mobile */
+            .login-btn {
+                width: auto;
+                padding: 10px 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="user-info">
+            <span class="name">Xin chào, <strong>%USER_NAME%</strong></span>
+        </div>
+        <a href="/logout" class="logout-btn">Đăng xuất</a>
+    </div>
+
+    <div class="main-content">
+        <h1>Lựa Chọn Hành Động</h1>
+        <div class="action-menu">
+            <a href="doipin.html" class="action-button swap">Đổi Pin</a>
+            <a href="laypin.html" class="action-button get">Lấy Pin</a>
+        </div>
+    </div>
+
+</body>
+</html>
