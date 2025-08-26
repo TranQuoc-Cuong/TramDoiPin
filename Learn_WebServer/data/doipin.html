@@ -5,14 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hướng Dẫn Đổi Pin - Trạm Pin ESP32</title>
     <style>
-        /* --- TOÀN BỘ CSS GỐC CỦA BẠN ĐƯỢC GIỮ NGUYÊN TẠI ĐÂY --- */
         body {
             background-color: #f4f4f4;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding-bottom: 40px;
         }
-
         .header {
             display: flex;
             justify-content: space-between;
@@ -21,29 +19,14 @@
             padding: 15px 5%;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-
-        .header h1 {
-            font-size: 1.5em;
-            color: #333;
-            margin: 0;
-        }
-        
+        .header h1 { font-size: 1.5em; color: #333; margin: 0; }
         .back-btn {
-            background-color: #6c757d;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            text-decoration: none;
+            background-color: #6c757d; color: white; padding: 10px 20px;
+            border: none; border-radius: 5px; cursor: pointer;
+            font-weight: bold; text-decoration: none;
             transition: background-color 0.2s;
         }
-        
-        .back-btn:hover {
-            background-color: #5a6268;
-        }
-
+        .back-btn:hover { background-color: #5a6268; }
         .instructions-container {
             display: flex;
             flex-direction: column;
@@ -51,60 +34,50 @@
             gap: 30px;
             padding: 40px 20px;
         }
-
         .instruction-card {
             background-color: white;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 500px;
-            text-align: center;
             padding: 30px;
+        }
+        .card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            text-align: left;
         }
-
-        .instruction-card h2 {
-            margin-top: 0;
-            font-size: 1.5em;
-            color: #333;
+        .instruction-text h2 {
+            margin-top: 0; font-size: 1.5em; color: #333;
         }
-
-        .instruction-card p {
-            font-size: 1.1em;
-            color: #555;
-            line-height: 1.6;
-            margin-bottom: 0;
+        .instruction-text p {
+            font-size: 1.1em; color: #555;
+            line-height: 1.6; margin-bottom: 0;
         }
-
         .slot-number {
-            font-size: 4em;
-            font-weight: bold;
-            padding-left: 20px;
+            font-size: 4em; font-weight: bold; padding-left: 20px;
         }
-
         .take-out { border-top: 6px solid #4CAF50; }
         .take-out .slot-number { color: #4CAF50; }
-
         .put-in { border-top: 6px solid #ff9800; }
         .put-in .slot-number { color: #ff9800; }
 
-
-        @media (max-width: 600px) {
-            .header {
-                flex-direction: column;
-                gap: 15px;
-                padding: 20px;
-            }
-            .instruction-card {
-                flex-direction: column;
-            }
-            .slot-number {
-                padding-left: 0;
-                margin-top: 20px;
-            }
+        /* CSS cho phần chi tiết pin được thêm vào */
+        .inserted-pin-details {
+            display: none; /* Ẩn ban đầu */
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 2px dashed #ddd;
         }
+        .info-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 15px; font-size: 0.95em; text-align: left;
+        }
+        .info-item { background-color: #f8f9fa; padding: 10px 15px; border-radius: 8px; }
+        .info-item .label { color: #6c757d; font-size: 0.85em; display: block; }
+        .info-item .value { font-weight: 600; font-size: 1.15em; }
+        .value.status-error-text { color: #dc3545; }
     </style>
 </head>
 <body>
@@ -114,62 +87,101 @@
     </div>
 
     <div class="instructions-container">
-        <div class="instruction-card take-out">
-            <div>
-                <h2>Bước 1: Lấy Pin Đã Sạc Đầy</h2>
-                <p>Vui lòng lấy pin đã được sạc đầy ra khỏi khay số:</p>
-            </div>
-            <div class="slot-number" id="full-pin-slot">...</div>
-        </div>
         <div class="instruction-card put-in">
-            <div>
-                <h2>Bước 2: Đặt Pin Cần Sạc Vào</h2>
-                <p>Vui lòng đặt pin của bạn vào khay trống dưới đây:</p>
+            <div class="card-header">
+                <div class="instruction-text" id="put-in-text">
+                    <h2>Bước 1: Đặt Pin Cần Sạc Vào</h2> 
+                    <p>Vui lòng đặt pin của bạn vào khay trống dưới đây:</p> 
+                </div>
+                <div class="slot-number" id="empty-pin-slot">...</div>
             </div>
-            <div class="slot-number" id="empty-pin-slot">...</div>
+            <div class="inserted-pin-details" id="inserted-pin-details">
+                 <div class="info-grid">
+                    <div class="info-item">
+                        <span class="label">Dung lượng</span>
+                        <span class="value percent">--%</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Trạng thái</span>
+                        <span class="value status">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Điện áp</span>
+                        <span class="value voltage">-- V</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Nhiệt độ</span>
+                        <span class="value temperature">-- °C</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="instruction-card take-out">
+            <div class="card-header">
+                <div class="instruction-text">
+                    <h2>Bước 2: Lấy Pin Đã Sạc Đầy</h2>
+                    <p>Vui lòng lấy pin đã được sạc đầy ra khỏi khay số:</p>
+                </div>
+                <div class="slot-number" id="full-pin-slot">...</div>
+            </div>
         </div>
     </div>
 
     <script>
         var gateway = `ws://${window.location.hostname}/ws`;
         var websocket;
+        let emptySlotToMonitor = null; // Biến để lưu ID của khe cần theo dõi
 
-        // Chạy hàm khởi tạo khi trang được tải xong
         window.addEventListener('load', initWebSocket);
 
         function initWebSocket() {
-            console.log('Trying to open a WebSocket connection...');
             websocket = new WebSocket(gateway);
             websocket.onopen = onOpen;
             websocket.onmessage = onMessage;
-            // Thêm onclose để tự động kết nối lại nếu mất mạng
-            websocket.onclose = function(event) {
-                console.log('Connection closed');
-                setTimeout(initWebSocket, 2000); // Thử kết nối lại sau 2 giây
-            };
+            websocket.onclose = () => setTimeout(initWebSocket, 2000);
         }
 
-        // Khi kết nối thành công, gửi yêu cầu
         function onOpen(event) {
-            console.log('Connection opened');
             websocket.send('getSwapSlots');
         }
 
-        // Khi nhận được tin nhắn từ server
         function onMessage(event) {
-            console.log('Message from server: ', event.data);
-            var data;
-            try {
-                data = JSON.parse(event.data);
-            } catch(e) {
-                console.error("Error parsing JSON:", e);
-                return;
-            }
+            let data;
+            try { data = JSON.parse(event.data); } catch(e) { return; }
 
-            // Chỉ xử lý tin nhắn có type là 'swapSlots'
-            if (data.type === 'swapSlots') {
+            // Xử lý tin nhắn ban đầu để lấy số khe
+            if (data.type === 'swapSlots' || data.type === 'swapSlotsUpdate') {
                 document.getElementById('full-pin-slot').innerText = data.full;
                 document.getElementById('empty-pin-slot').innerText = data.empty;
+                // Lưu lại số khe trống để theo dõi
+                if (data.empty !== 'đợi') {
+                    emptySlotToMonitor = parseInt(data.empty, 10);
+                }
+            }
+
+            // Xử lý tin nhắn dữ liệu pin thời gian thực
+            if (data.type === 'pinData' && data.id === emptySlotToMonitor && data.status !== 'Trống') {
+                const detailsContainer = document.getElementById('inserted-pin-details');
+                // Hiển thị khung chi tiết và cập nhật dữ liệu
+                if (detailsContainer.style.display !== 'block') {
+                    detailsContainer.style.display = 'block';
+                    const instructionText = document.getElementById('put-in-text').querySelector('p');
+                    instructionText.textContent = 'Đã phát hiện pin, đang kiểm tra trạng thái...';
+                }
+                
+                detailsContainer.querySelector('.percent').innerText = `${data.percent}%`;
+                detailsContainer.querySelector('.voltage').innerText = `${data.voltage.toFixed(2)} V`;
+                detailsContainer.querySelector('.temperature').innerText = `${data.temperature.toFixed(1)} °C`;
+
+                const statusElement = detailsContainer.querySelector('.status');
+                statusElement.innerText = data.status;
+
+                // Thêm màu cho chữ nếu có lỗi
+                statusElement.classList.remove('status-error-text');
+                if (data.status === 'Lỗi' || data.status === 'Nhiệt Độ Cao') {
+                    statusElement.classList.add('status-error-text');
+                }
             }
         }
     </script>

@@ -4,335 +4,159 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
+#include <Preferences.h> // Thư viện để lưu trữ dữ liệu
+
+// --- CẤU HÌNH ADMIN ---
+const char* adminUser = "admin";
+const char* adminPass = "123456"; // <-- THAY ĐỔI MẬT KHẨU NÀY!
 
 #define RX2_PIN 16
 #define TX2_PIN 17
 
-// --- THAY ĐỔI THÔNG TIN WIFI CỦA BẠN ---
 const char* ssid = "wifi";
 const char* password = "12345678";
 
-// --- KHAI BÁO CÁC ĐỐI TƯỢNG SERVER ---
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
-
-// --- BIẾN TOÀN CỤC ĐỂ LƯU TRẠNG THÁI ĐĂNG NHẬP ---
-String loggedInUser = ""; // Lưu username của người đang đăng nhập
-String loggedInUserFullName = ""; // Lưu tên đầy đủ
+Preferences preferences; // Đối tượng để quản lý lưu trữ
 
 typedef struct {
-    int p;          // Tên 'p' khớp với 'P:' trong chuỗi và 'p' trong JSON
-    int percent;
-    char c[10];     // Tên 'c' khớp với 'C:' trong chuỗi và 'c' trong JSON
-    float v;        // Tên 'v' khớp với 'V:' trong chuỗi và 'v' trong JSON
-    float i;
-    float t;
+    int p, percent;
+    char c[10];
+    float v, i, t;
 } PinData;
 
-// --- HÀM XỬ LÝ SỰ KIỆN WEBSOCKET (ĐÃ NÂNG CẤP) ---
+int pin_lap = 5, pin_thao = 5;
+
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
-  switch (type) {
-    case WS_EVT_CONNECT:
-      // Client vừa kết nối
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      break;
-    case WS_EVT_DISCONNECT:
-      // Client vừa ngắt kết nối
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      break;
-    case WS_EVT_DATA:
-      { // Bắt đầu khối lệnh mới cho case này
-        // Nhận được dữ liệu từ client
+    if(type == WS_EVT_CONNECT){
+        Serial.printf("WebSocket client #%u connected\n", client->id());
+    } else if(type == WS_EVT_DISCONNECT){
+        Serial.printf("WebSocket client #%u disconnected\n", client->id());
+    } else if(type == WS_EVT_DATA){
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
-        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-          data[len] = 0; // Thêm ký tự kết thúc chuỗi
-          String message = (char*)data;
-          Serial.printf("Received message from client #%u: %s\n", client->id(), message.c_str());
+        if(info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT){
+            data[len] = 0;
+            String message = (char*)data;
+            Serial.printf("Received message from client #%u: %s\n", client->id(), message.c_str());
 
-          // === LOGIC XỬ LÝ YÊU CẦU TỪ CLIENT ===
-          if (message == "getSwapSlots") {
-            StaticJsonDocument<128> doc;
-            doc["type"] = "swapSlots";
-            doc["full"] = random(1, 5); // Mô phỏng khay pin đầy
-            doc["empty"] = random(5, 9); // Mô phỏng khay pin trống
-            
+            StaticJsonDocument<256> doc;
             String response;
-            serializeJson(doc, response);
-            client->text(response); // Gửi phản hồi lại cho chỉ client này
-          } 
-          else if (message == "getPickupSlot") {
-            StaticJsonDocument<128> doc;
-            doc["type"] = "pickupSlot";
-            doc["slot"] = random(1, 9); // Mô phỏng khay lấy pin
+
+            if (message == "getSwapSlots") {
+                doc["type"] = "swapSlots";
+                doc["full"] = (pin_thao != 5) ? String(pin_thao) : "đợi";
+                doc["empty"] = (pin_lap != 5) ? String(pin_lap) : "đợi";
+            } else if (message == "getPickupSlot") {
+                doc["type"] = "pickupSlot";
+                doc["slot"] = (pin_thao != 5) ? String(pin_thao) : "đợi";
+            } 
+            // Xử lý yêu cầu lấy dữ liệu thống kê từ trang admin
+            else if (message == "getAdminStats") {
+                doc["type"] = "adminStats";
+                doc["swapCount"] = preferences.getUInt("swap", 0);
+                doc["takeCount"] = preferences.getUInt("take", 0);
+            }
             
-            String response;
-            serializeJson(doc, response);
-            client->text(response); // Gửi phản hồi lại cho chỉ client này
-          }
+            if (!doc.isNull()) {
+                serializeJson(doc, response);
+                client->text(response); // Chỉ gửi trả lời cho client đã yêu cầu
+            }
         }
-      } // Kết thúc khối lệnh
-      break;
-    case WS_EVT_ERROR:
-      // Có lỗi xảy ra
-      Serial.printf("WebSocket client #%u error(%u): %s\n", client->id(), *((uint16_t*)arg), (char*)data);
-      break;
-  }
+    }
 }
 
-// --- HÀM XỬ LÝ KHI KHÔNG TÌM THẤY TRANG ---
-void notFound(AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Trang không tồn tại.");
-}
-
-// --- HÀM ĐỌC VÀ THAY THẾ PLACEHOLDER ---
-String processor(const String& var){
-  if(var == "USER_NAME"){
-    return loggedInUserFullName;
-  }
-  return String();
-}
-
-// --- HÀM KHỞI TẠO ---
 void setup() {
     Serial.begin(115200);
+    Serial2.begin(115200, SERIAL_8N1, RX2_PIN, TX2_PIN);
 
-    Serial2.begin(115200, SERIAL_8N1, RX2_PIN, TX2_PIN); 
-
-    Serial.println("UART2 Initialized Successfully!");
-
-    // 1. KHỞI ĐỘNG HỆ THỐNG FILE SPIFFS
-    if(!SPIFFS.begin(true)){
-        Serial.println("Lỗi khi khởi động SPIFFS");
-        return;
-    }
-
-    // 2. KẾT NỐI WIFI
+    // Khởi tạo Preferences
+    preferences.begin("admin-stats", false); // "admin-stats" là tên namespace, false = read/write
+    
+    SPIFFS.begin(true);
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
+        delay(500); Serial.print(".");
     }
     Serial.println("\nWiFi connected. IP: " + WiFi.localIP().toString());
 
-    // 3. THIẾT LẬP WEBSOCKET
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
 
-    // 4. ĐỊNH NGHĨA CÁC ĐƯỜNG DẪN (ROUTES) HTTP
+    // --- CÁC ROUTE CŨ ---
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->redirect("/dashboard.html"); });
+    server.on("/dashboard.html", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/dashboard.html", "text/html"); Serial2.println("back:");});
+    server.on("/doipin.html", HTTP_GET, [](AsyncWebServerRequest *request){ Serial2.println("doipin:"); request->send(SPIFFS, "/doipin.html", "text/html"); });
+    server.on("/laypin.html", HTTP_GET, [](AsyncWebServerRequest *request){ Serial2.println("laypin:"); request->send(SPIFFS, "/laypin.html", "text/html"); });
+    server.on("/lappin.html", HTTP_GET, [](AsyncWebServerRequest *request){ Serial2.println("lappin:"); request->send(SPIFFS, "/lappin.html", "text/html"); });
+    server.on("/pindetail.html", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/pindetail.html", "text/html"); });
+
+    // --- CÁC ROUTE MỚI CHO TRANG ADMIN ---
+    server.on("/login.html", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/login.html", "text/html"); });
+    server.on("/admin.html", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/admin.html", "text/html"); });
     
-    // Phục vụ các file HTML tĩnh từ SPIFFS
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/trangchu.html", "text/html");
-    });
-    server.on("/dangnhap.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/dangnhap.html", "text/html");
-    });
-    server.on("/dangky.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        request->send(SPIFFS, "/dangky.html", "text/html");
-    });
-    server.on("/doipin.html", HTTP_GET, [](AsyncWebServerRequest *request){
-    if(loggedInUser == ""){
-        request->redirect("/dangnhap.html"); // Nếu chưa đăng nhập, đá về trang đăng nhập
-    } else {
-        request->send(SPIFFS, "/doipin.html", "text/html"); // Đã đăng nhập, cho phép xem trang
-    }
-    });
-    server.on("/laypin.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        if(loggedInUser == ""){
-            request->redirect("/dangnhap.html"); // Nếu chưa đăng nhập, đá về trang đăng nhập
-        } else {
-            request->send(SPIFFS, "/laypin.html", "text/html"); // Đã đăng nhập, cho phép xem trang
-        }
-    });
-
-    // BỘ XỬ LÝ GET CHO DASHBOARD (QUAN TRỌNG)
-    server.on("/dashboard.html", HTTP_GET, [](AsyncWebServerRequest *request){
-        if(loggedInUser == ""){
-            request->redirect("/dangnhap.html");
-            return;
-        }
-
-        // 1. Mở file dashboard.html
-        File file = SPIFFS.open("/dashboard.html", "r");
-        if (!file) {
-            request->send(404, "text/plain", "File dashboard.html khong tim thay.");
-            return;
-        }
-
-        // 2. Đọc toàn bộ nội dung file vào một biến String
-        String htmlContent = file.readString();
-        file.close();
-
-        // 3. Tự thay thế placeholder
-        htmlContent.replace("%USER_NAME%", loggedInUserFullName);
-
-        // 4. Gửi chuỗi String đã được sửa đổi đi
-        request->send(200, "text/html", htmlContent);
-    });
-
-    // Xử lý yêu cầu POST từ form đăng ký
-    server.on("/register", HTTP_POST, [](AsyncWebServerRequest *request){
-        String fullname, phone, username, password;
-        if(request->hasParam("fullname", true)) fullname = request->getParam("fullname", true)->value();
-        if(request->hasParam("phone", true)) phone = request->getParam("phone", true)->value();
-        if(request->hasParam("username", true)) username = request->getParam("username", true)->value();
-        if(request->hasParam("password", true)) password = request->getParam("password", true)->value();
-
-        File file = SPIFFS.open("/users.json", "r");
-        StaticJsonDocument<1024> doc; 
-        
-        if (file && file.size() > 0) {
-            deserializeJson(doc, file);
-        } else {
-            doc.to<JsonArray>();
-        }
-        file.close();
-
-        JsonArray array = doc.as<JsonArray>();
-        for(JsonObject user : array) {
-            if (user["username"] == username) {
-                request->send(400, "text/plain", "Ten dang nhap da ton tai. Vui long chon ten khac.");
-                return;
+    // Route xử lý việc đăng nhập
+    server.on("/login", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (request->hasParam("username", true) && request->hasParam("password", true)) {
+            String username = request->getParam("username", true)->value();
+            String password = request->getParam("password", true)->value();
+            if (username.equals(adminUser) && password.equals(adminPass)) {
+                request->send(200, "text/plain", "OK");
+            } else {
+                request->send(401, "text/plain", "Unauthorized");
             }
-        }
-
-        JsonObject newUser = array.createNestedObject();
-        newUser["fullname"] = fullname;
-        newUser["phone"] = phone;
-        newUser["username"] = username;
-        newUser["password"] = password;
-
-        file = SPIFFS.open("/users.json", "w");
-        if (!file) {
-            request->send(500, "text/plain", "Loi khong the mo file de luu.");
-            return;
-        }
-        serializeJson(doc, file);
-        file.close();
-
-        Serial.println("Da them nguoi dung moi: " + username);
-        request->redirect("/dangnhap.html");
-    });
-
-    // Xử lý yêu cầu POST từ form đăng nhập
-    server.on("/login", HTTP_POST, [](AsyncWebServerRequest *request){
-        String username, password;
-        if(request->hasParam("username", true)) username = request->getParam("username", true)->value();
-        if(request->hasParam("password", true)) password = request->getParam("password", true)->value();
-
-        File file = SPIFFS.open("/users.json", "r");
-        if (!file) {
-            request->send(400, "text/plain", "Chua co nguoi dung nao duoc dang ky.");
-            return;
-        }
-
-        StaticJsonDocument<1024> doc;
-        DeserializationError error = deserializeJson(doc, file);
-        file.close();
-
-        if (error) {
-            request->send(500, "text/plain", "Loi doc du lieu nguoi dung.");
-            return;
-        }
-
-        JsonArray array = doc.as<JsonArray>();
-        bool foundUser = false;
-        for(JsonObject user : array) {
-            if (user["username"] == username && user["password"] == password) {
-                loggedInUser = user["username"].as<String>();
-                loggedInUserFullName = user["fullname"].as<String>();
-                foundUser = true;
-                break;
-            }
-        }
-
-        if (foundUser) {
-            Serial.println("Dang nhap thanh cong cho user: " + username);
-            request->redirect("/dashboard.html"); // Chuyển hướng khi thành công
         } else {
-            Serial.println("Dang nhap that bai cho user: " + username);
-            loggedInUser = "";
-            loggedInUserFullName = "";
-            request->redirect("/dangnhap.html"); // Chuyển hướng khi thất bại
+            request->send(400, "text/plain", "Bad Request");
         }
     });
-    
-    // Xử lý yêu cầu đăng xuất
-    server.on("/logout", HTTP_GET, [](AsyncWebServerRequest *request){
-        Serial.println("User " + loggedInUser + " da dang xuat.");
-        loggedInUser = "";
-        loggedInUserFullName = "";
-        request->redirect("/");
-    });
 
-    // 5. ĐĂNG KÝ HÀM XỬ LÝ KHI KHÔNG TÌM THẤY TRANG
-    server.onNotFound(notFound);
-
-    // 6. BẮT ĐẦU CHẠY SERVER
     server.begin();
-    
-    Serial.println("HTTP server started");
 }
-// --- VÒNG LẶP CHÍNH ---
+
 void loop() {
     if (Serial2.available()) {
         String dataString = Serial2.readStringUntil('\n');
         dataString.trim();
-
         if (dataString.length() > 0) {
-            Serial.print("Received from UART2: ");
+            Serial.print("Received from STM32: ");
             Serial.println(dataString);
+            
+            StaticJsonDocument<384> doc;
+            String output;
 
-            PinData pin; 
-
-            int itemsParsed = sscanf(dataString.c_str(),
-                   "P:%d,%%:%d,C:%[^,],V:%f,I:%f,T:%f",
-                   &pin.p,         // Sửa thành &pin.p
-                   &pin.percent,
-                   pin.c,          // Sửa thành pin.c
-                   &pin.v,         // Sửa thành &pin.v
-                   &pin.i,         // Sửa thành &pin.i
-                   &pin.t);        // Sửa thành &pin.t
-
-            if (itemsParsed == 6) {
-                StaticJsonDocument<256> doc;
-                doc["id"] = pin.p;
-                doc["percent"] = pin.percent;
-
-                if (strcmp(pin.c, "T") == 0) {
-                    doc["status"] = "Trống";
+            if (dataString.startsWith("P:")) {
+                PinData pin;
+                if (sscanf(dataString.c_str(), "P:%d,%%:%d,C:%[^,],V:%f,I:%f,T:%f", &pin.p, &pin.percent, pin.c, &pin.v, &pin.i, &pin.t) == 6) {
+                    doc["type"] = "pinData";
+                    doc["id"] = pin.p;
+                    doc["percent"] = pin.percent;
+                    if (strcmp(pin.c, "T")==0) doc["status"]="Trống"; else if (strcmp(pin.c, "S")==0) doc["status"]="Sạc"; else if (strcmp(pin.c, "D")==0) doc["status"]="Đầy"; else if (strcmp(pin.c, "N")==0) doc["status"]="Nhiệt Độ Cao"; else if (strcmp(pin.c, "L")==0) doc["status"]="Lỗi"; else doc["status"]="Không xác định";
+                    doc["voltage"] = pin.v;
+                    doc["current"] = pin.i;
+                    doc["temperature"] = pin.t;
                 }
-                else if (strcmp(pin.c, "S") == 0) {
-                    doc["status"] = "Sạc";
-                }
-                else if (strcmp(pin.c, "D") == 0) {
-                    doc["status"] = "Đầy";
-                }
-                else if (strcmp(pin.c, "N") == 0) {
-                    doc["status"] = "Nhiệt Độ Cao";
-                }
-                else if (strcmp(pin.c, "L") == 0) {
-                    doc["status"] = "Lỗi";
-                }
-                else if (strcmp(pin.c, "R") == 0) {
-                    doc["status"] = "Không xác định";
-                }
-                // Thêm một trường hợp else để xử lý các ký tự không mong muốn
-                else {
-                    doc["status"] = "Trạng thái lạ";
-                }
-
-                String output;
+            } else if (dataString.startsWith("doipin:")) {
+                sscanf(dataString.c_str(), "doipin:%d,laypin:%d", &pin_lap, &pin_thao);
+                doc["type"] = "swapSlotsUpdate";
+                doc["full"] = pin_thao;
+                doc["empty"] = pin_lap;
+                // TĂNG VÀ LƯU BỘ ĐẾM ĐỔI PIN
+                unsigned int swapCount = preferences.getUInt("swap", 0) + 1;
+                preferences.putUInt("swap", swapCount);
+            } else if (dataString.startsWith("laypin:")) {
+                sscanf(dataString.c_str(), "laypin:%d", &pin_thao);
+                doc["type"] = "pickupSlotUpdate";
+                doc["slot"] = pin_thao;
+                // TĂNG VÀ LƯU BỘ ĐẾM LẤY PIN
+                unsigned int takeCount = preferences.getUInt("take", 0) + 1;
+                preferences.putUInt("take", takeCount);
+            } 
+            
+            if (!doc.isNull()) {
                 serializeJson(doc, output);
-                
-                Serial.print("Sending via WebSocket: ");
-                Serial.println(output);
-
-                ws.textAll(output);
-            } else {
-                Serial.print("Failed to parse data string. Items parsed: ");
-                Serial.println(itemsParsed);
+                ws.textAll(output); 
             }
         }
     }
+    ws.cleanupClients();
 }

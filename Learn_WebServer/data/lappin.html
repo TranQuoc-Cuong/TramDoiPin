@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lắp Pin - Trạm Pin ESP32</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            color: #212529;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+            padding: 15px 5%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header h1 { margin: 0; }
+        .back-btn {
+            background-color: #6c757d; color: white; padding: 10px 20px;
+            border: none; border-radius: 5px; cursor: pointer;
+            font-weight: bold; text-decoration: none;
+        }
+        .main-content { padding: 40px 20px; }
+        .status-header { text-align: center; margin-bottom: 30px; }
+        .status-header h2 { font-size: 2em; color: #333; }
+        .status-header p { font-size: 1.2em; color: #555; }
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .slot-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            padding: 20px;
+            transition: all 0.3s ease;
+            border-top: 5px solid #6c757d; /* Mặc định là màu xám */
+        }
+        /* Các màu trạng thái cho border-top */
+        .status-empty { border-top-color: #6c757d; } /* Trống */
+        .status-charging { border-top-color: #007bff; } /* Sạc */
+        .status-full { border-top-color: #28a745; } /* Đầy */
+        .status-error { border-top-color: #dc3545; } /* Lỗi */
+
+        .slot-card h3 { margin-top: 0; text-align: center; }
+        .card-content { min-height: 120px; display: flex; align-items: center; justify-content: center; }
+        
+        /* Tin nhắn cho khe trống */
+        .empty-message { text-align: center; color: #6c757d; font-size: 1.1em; }
+
+        /* Khung hiển thị chi tiết pin */
+        .pin-details { display: none; width: 100%; }
+        .info-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 10px; font-size: 0.95em;
+        }
+        .info-item { background-color: #f8f9fa; padding: 8px 12px; border-radius: 6px; }
+        .info-item .label { color: #6c757d; font-size: 0.8em; display: block; }
+        .info-item .value { font-weight: 600; font-size: 1.1em; }
+        .value.status-error-text { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Lắp Pin</h1>
+        <a href="dashboard.html" class="back-btn">Quay Lại</a>
+    </div>
+    <div class="main-content">
+        <div class="status-header">
+            <h2>Mời Lắp Pin Vào Ô Trống</h2>
+            <p>Trạng thái được cập nhật trực tiếp dưới đây.</p>
+        </div>
+        <div class="slot-grid" id="slot-container">
+            <div class="slot-card" id="slot-1"></div>
+            <div class="slot-card" id="slot-2"></div>
+            <div class="slot-card" id="slot-3"></div>
+            <div class="slot-card" id="slot-4"></div>
+        </div>
+    </div>
+
+    <script>
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+
+        // **Thay đổi ở đây**: Đã xóa thẻ <span> chứa icon
+        const cardTemplates = {
+            empty: (slotId) => `
+                <h3>Khe Số ${slotId}</h3>
+                <div class="card-content">
+                    <div class="empty-message">
+                        <p>Sẵn sàng lắp pin</p>
+                    </div>
+                </div>`,
+            details: (slotId) => `
+                <h3>Khe Số ${slotId}</h3>
+                <div class="card-content">
+                    <div class="pin-details" style="display: block;">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <span class="label">Dung lượng</span>
+                                <span class="value percent">--%</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Trạng thái</span>
+                                <span class="value status">--</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Điện áp</span>
+                                <span class="value voltage">-- V</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="label">Dòng điện</span>
+                                <span class="value current">-- A</span>
+                            </div>
+                             <div class="info-item">
+                                <span class="label">Nhiệt độ</span>
+                                <span class="value temperature">-- °C</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`
+        };
+        
+        window.addEventListener('load', () => {
+            // Khởi tạo giao diện ban đầu cho 4 thẻ
+            for (let i = 1; i <= 4; i++) {
+                const card = document.getElementById(`slot-${i}`);
+                if (card) {
+                    card.innerHTML = cardTemplates.empty(i);
+                }
+            }
+            initWebSocket();
+        });
+
+        function initWebSocket() {
+            websocket = new WebSocket(gateway);
+            websocket.onmessage = onMessage;
+            websocket.onclose = () => setTimeout(initWebSocket, 2000);
+        }
+
+        function onMessage(event) {
+            let data;
+            try { data = JSON.parse(event.data); } catch(e) { return; }
+
+            if (data.type === 'pinData') {
+                updatePinCard(data);
+            }
+        }
+
+        function updatePinCard(data) {
+            const card = document.getElementById(`slot-${data.id}`);
+            if (!card) return;
+
+            const isCurrentlyEmpty = card.querySelector('.empty-message') !== null;
+
+            if (data.status === 'Trống') {
+                if (!isCurrentlyEmpty) {
+                    card.innerHTML = cardTemplates.empty(data.id);
+                }
+                card.className = 'slot-card status-empty';
+            } else {
+                if (isCurrentlyEmpty) {
+                    card.innerHTML = cardTemplates.details(data.id);
+                }
+                
+                card.querySelector('.percent').innerText = `${data.percent}%`;
+                card.querySelector('.voltage').innerText = `${data.voltage.toFixed(2)} V`;
+                card.querySelector('.current').innerText = `${data.current.toFixed(2)} A`;
+                card.querySelector('.temperature').innerText = `${data.temperature.toFixed(1)} °C`;
+                const statusElement = card.querySelector('.status');
+                statusElement.innerText = data.status;
+
+                let statusClass = 'status-charging';
+                statusElement.classList.remove('status-error-text');
+
+                if (data.status === 'Đầy') {
+                    statusClass = 'status-full';
+                } else if (data.status === 'Lỗi' || data.status === 'Nhiệt Độ Cao') {
+                    statusClass = 'status-error';
+                    statusElement.classList.add('status-error-text');
+                }
+                card.className = `slot-card ${statusClass}`;
+            }
+        }
+    </script>
+</body>
+</html>

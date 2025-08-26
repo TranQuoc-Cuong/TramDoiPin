@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chi Tiết Pin - Trạm Pin ESP32</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            color: #212529;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+            padding: 15px 5%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            font-size: 1.5em;
+            color: #333;
+            margin: 0;
+        }
+        .back-btn {
+            background-color: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        .back-btn:hover {
+            background-color: #5a6268;
+        }
+        .main-content {
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .detail-card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 500px;
+            padding: 30px;
+            border-top: 6px solid #007bff;
+        }
+        .detail-card h2 {
+            text-align: center;
+            margin-top: 0;
+            font-size: 2em;
+            color: #0056b3;
+            margin-bottom: 25px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            font-size: 1.1em;
+        }
+        .info-item {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .info-item .label {
+            color: #6c757d;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        .info-item .value {
+            font-weight: 600;
+            font-size: 1.4em;
+        }
+        /* Tô màu cho các trạng thái */
+        .value.status-charging { color: #1e40af; }
+        .value.status-full { color: #065f46; }
+        .value.status-error { color: #991b1b; }
+        .value.status-empty { color: #4b5563; }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1 id="page-title">Chi Tiết Pin ...</h1>
+        <a href="dashboard.html" class="back-btn">Quay Lại</a>
+    </div>
+
+    <div class="main-content">
+        <div class="detail-card">
+            <h2 id="card-title">Trạng Thái Pin ...</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="label">Dung lượng Pin</span>
+                    <span class="value" id="pin-percent">--%</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Trạng thái</span>
+                    <span class="value" id="pin-status">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Điện áp</span>
+                    <span class="value" id="pin-voltage">-- V</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Dòng điện</span>
+                    <span class="value" id="pin-current">-- A</span>
+                </div>
+                <div class="info-item" style="grid-column: 1 / -1;"> <span class="label">Nhiệt độ</span>
+                    <span class="value" id="pin-temperature">-- °C</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+        let pinId = null;
+
+        window.addEventListener('load', () => {
+            const params = new URLSearchParams(window.location.search);
+            pinId = params.get('id');
+
+            if (pinId) {
+                document.getElementById('page-title').innerText = `Chi Tiết Pin ${pinId}`;
+                document.getElementById('card-title').innerText = `Trạng Thái Pin ${pinId}`;
+                initWebSocket();
+            } else {
+                document.getElementById('page-title').innerText = 'Không Tìm Thấy Pin';
+            }
+        });
+
+        function initWebSocket() {
+            websocket = new WebSocket(gateway);
+            websocket.onopen = () => console.log('Connection opened');
+            websocket.onclose = () => setTimeout(initWebSocket, 2000);
+            websocket.onmessage = onMessage;
+        }
+
+        function onMessage(event) {
+            let data;
+            try { data = JSON.parse(event.data); } catch (e) { return; }
+
+            // Chỉ cập nhật nếu dữ liệu là cho pin đang xem
+            if (data.type === 'pinData' && data.id == pinId) {
+                document.getElementById('pin-percent').innerText = `${data.percent}%`;
+                document.getElementById('pin-voltage').innerText = `${data.voltage.toFixed(2)} V`;
+                document.getElementById('pin-current').innerText = `${data.current.toFixed(2)} A`;
+                document.getElementById('pin-temperature').innerText = `${data.temperature.toFixed(1)} °C`;
+                
+                const statusElement = document.getElementById('pin-status');
+                statusElement.innerText = data.status;
+
+                // Cập nhật màu chữ trạng thái
+                statusElement.className = 'value'; // Reset class
+                let statusClass = '';
+                switch (data.status) {
+                    case 'Sạc': statusClass = 'status-charging'; break;
+                    case 'Đầy': statusClass = 'status-full'; break;
+                    case 'Nhiệt Độ Cao':
+                    case 'Lỗi': statusClass = 'status-error'; break;
+                    case 'Trống':
+                    default: statusClass = 'status-empty'; break;
+                }
+                if (statusClass) {
+                    statusElement.classList.add(statusClass);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

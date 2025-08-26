@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Quản Trị</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 0; color: #333; }
+        .header { display: flex; justify-content: space-between; align-items: center; background-color: #fff; padding: 15px 5%; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header h1 { margin: 0; }
+        .nav-btn { background-color: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; text-decoration: none; }
+        .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 30px; }
+        .stat-card { background-color: #fff; border-radius: 8px; padding: 25px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .stat-card h2 { margin-top: 0; font-size: 1.2rem; color: #555; }
+        .stat-count { font-size: 3.5rem; font-weight: bold; color: #007bff; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Bảng Thống Kê</h1>
+        <a href="dashboard.html" class="nav-btn">Về Trang Chính</a>
+    </div>
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h2>Tổng Số Lần Đổi Pin</h2>
+                <p class="stat-count" id="swap-count">...</p>
+            </div>
+            <div class="stat-card">
+                <h2>Tổng Số Lần Lấy Pin</h2>
+                <p class="stat-count" id="take-count">...</p>
+            </div>
+        </div>
+    </div>
+    <script>
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+        window.addEventListener('load', initWebSocket);
+
+        function initWebSocket() {
+            websocket = new WebSocket(gateway);
+            websocket.onopen = onOpen;
+            websocket.onmessage = onMessage;
+            websocket.onclose = () => setTimeout(initWebSocket, 2000);
+        }
+
+        function onOpen() {
+            websocket.send('getAdminStats');
+        }
+
+        function onMessage(event) {
+            let data;
+            try { data = JSON.parse(event.data); } catch (e) { return; }
+            if (data.type === 'adminStats') {
+                document.getElementById('swap-count').textContent = data.swapCount;
+                document.getElementById('take-count').textContent = data.takeCount;
+            }
+        }
+    </script>
+</body>
+</html>

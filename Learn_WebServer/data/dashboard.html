@@ -5,133 +5,243 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng Điều Khiển - Trạm Pin ESP32</title>
     <style>
+        /* --- Cài đặt chung & Phông chữ --- */
         body {
-            background-color: #f4f4f4;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8f9fa;
             margin: 0;
+            color: #212529;
+            line-height: 1.6;
         }
 
-        /* --- Header & User Info --- */
+        /* --- Container chính --- */
+        .container {
+            width: 90%;
+            max-width: 1100px;
+            margin: 2rem auto;
+        }
+
+        /* --- Header --- */
         .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: white;
-            padding: 15px 5%;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-        }
-
-        .user-info .name {
-            font-size: 1.2em; /* Cho chữ to hơn một chút */
-        }
-
-        .user-info .name strong {
-            color: #1a73e8;
-        }
-        
-        .logout-btn {
-            background-color: #f44336;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            text-decoration: none;
-            transition: background-color 0.2s;
-        }
-        
-        .logout-btn:hover {
-            background-color: #da190b;
-        }
-
-        /* --- Main Content --- */
-        .main-content {
-            padding: 40px 20px;
             text-align: center;
+            margin-bottom: 2.5rem;
         }
-        
-        .main-content h1 {
-            color: #333;
-            margin-bottom: 40px;
+        .header h1 {
+            color: #0056b3;
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .header p {
+            color: #6c757d;
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
-        /* --- Action Menu --- */
+        /* --- Menu hành động --- */
         .action-menu {
             display: flex;
+            gap: 1.5rem;
             justify-content: center;
-            gap: 30px;
             flex-wrap: wrap;
+            margin-bottom: 3rem;
         }
-
         .action-button {
-            background-color: white;
-            color: #333;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            width: 200px;
-            padding: 30px;
-            text-align: center;
+            padding: 0.9rem 2.5rem;
+            background: linear-gradient(145deg, #0d6efd, #0a58ca);
+            color: white;
+            border: none;
+            border-radius: 50px;
             text-decoration: none;
-            font-size: 1.5em;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease;
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
+            cursor: pointer;
+            text-align: center;
         }
-
         .action-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
+            background: linear-gradient(145deg, #0b5ed7, #0a58ca);
+        }
+
+        /* --- Khu vực trạng thái pin --- */
+        .pin-status-section h2 {
+            color: #0056b3;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 0.75rem;
+        }
+        .pin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* --- Thẻ thông tin pin --- */
+        .pin-card-link { /* THÊM CSS CHO THẺ LIÊN KẾT */
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .pin-card {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e9ecef;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+        }
+        .pin-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+        }
+        .card-header {
+            padding: 0.75rem 1.5rem;
+            transition: background-color 0.3s ease;
+        }
+        .card-header h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0;
+            text-align: center;
+            transition: color 0.3s ease;
+        }
+        .pin-info {
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .pin-info p {
+            font-size: 1rem;
+            color: #495057;
+            margin: 0.5rem 0;
+        }
+        .percent-text {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0056b3;
+        }
+        .status-text {
+            font-size: 1rem;
+            font-weight: 600;
         }
 
-        .action-button.swap { color: #ff9800; }   /* Đổi pin */
-        .action-button.get { color: #4CAF50; }    /* Lấy pin (thay cho Mua pin) */
-
-        /* --- Responsive cho màn hình nhỏ (Mobile) --- */
-        @media (max-width: 600px) {
-            .header {
-                flex-direction: column; /* Xếp các phần tử theo chiều dọc */
-                justify-content: center; /* Căn giữa các phần tử */
-                gap: 15px; /* Tạo khoảng cách giữa tiêu đề và nút */
-                padding: 20px;
-            }
-
-            .header h1 {
-                position: static; /* Trả h1 về luồng bình thường, không định vị tuyệt đối nữa */
-                transform: none;  /* Bỏ hiệu ứng transform */
-                font-size: 1.3em; /* Có thể giảm kích thước chữ một chút */
-                text-align: center; /* Đảm bảo chữ vẫn ở giữa */
-            }
-
-            /* Đảm bảo nút không quá rộng trên mobile */
-            .login-btn {
-                width: auto;
-                padding: 10px 30px;
-            }
-        }
+        /* --- CÁC MÀU TRẠNG THÁI (ĐÃ CẬP NHẬT) --- */
+        .status-full .card-header { background-color: #d1fae5; }
+        .status-full .card-header h3 { color: #065f46; }
+        .status-charging .card-header { background-color: #dbeafe; }
+        .status-charging .card-header h3 { color: #1e40af; }
+        .status-error .card-header { background-color: #fee2e2; }
+        .status-error .card-header h3 { color: #991b1b; }
+        .status-empty .card-header { background-color: #e5e7eb; }
+        .status-empty .card-header h3 { color: #4b5563; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <header class="header">
+            <h1>Bảng Điều Khiển Trạm Pin</h1>
+            <p>Theo dõi và quản lý trạng thái các khe pin trong thời gian thực.</p>
+        </header>
 
-    <div class="header">
-        <div class="user-info">
-            <span class="name">Xin chào, <strong>%USER_NAME%</strong></span>
-        </div>
-        <a href="/logout" class="logout-btn">Đăng xuất</a>
+        <nav class="action-menu">
+            <a href="lappin.html" class="action-button">Thực Hiện Lắp Pin</a>
+            <a href="doipin.html" class="action-button">Thực Hiện Đổi Pin</a>
+            <a href="laypin.html" class="action-button">Thực Hiện Lấy Pin</a>
+            <a href="login.html" class="action-button" style="background: linear-gradient(145deg, #6c757d, #5a6268);">Trang Admin</a>
+        </nav>
+
+        <section class="pin-status-section">
+            <h2>Trạng Thái Pin Hiện Tại</h2>
+            <div class="pin-grid" id="pin-container">
+                <a href="pindetail.html?id=1" class="pin-card-link">
+                    <article class="pin-card status-empty" id="pin-1">
+                        <div class="card-header"><h3>Pin 1</h3></div>
+                        <div class="pin-info">
+                            <p>Dung lượng: <strong class="percent-text">--%</strong></p>
+                            <p>Trạng thái: <strong class="status-text">--</strong></p>
+                        </div>
+                    </article>
+                </a>
+                <a href="pindetail.html?id=2" class="pin-card-link">
+                    <article class="pin-card status-empty" id="pin-2">
+                        <div class="card-header"><h3>Pin 2</h3></div>
+                        <div class="pin-info">
+                            <p>Dung lượng: <strong class="percent-text">--%</strong></p>
+                            <p>Trạng thái: <strong class="status-text">--</strong></p>
+                        </div>
+                    </article>
+                </a>
+                <a href="pindetail.html?id=3" class="pin-card-link">
+                    <article class="pin-card status-empty" id="pin-3">
+                        <div class="card-header"><h3>Pin 3</h3></div>
+                        <div class="pin-info">
+                            <p>Dung lượng: <strong class="percent-text">--%</strong></p>
+                            <p>Trạng thái: <strong class="status-text">--</strong></p>
+                        </div>
+                    </article>
+                </a>
+                <a href="pindetail.html?id=4" class="pin-card-link">
+                    <article class="pin-card status-empty" id="pin-4">
+                        <div class="card-header"><h3>Pin 4</h3></div>
+                        <div class="pin-info">
+                            <p>Dung lượng: <strong class="percent-text">--%</strong></p>
+                            <p>Trạng thái: <strong class="status-text">--</strong></p>
+                        </div>
+                    </article>
+                </a>
+            </div>
+        </section>
     </div>
 
-    <div class="main-content">
-        <h1>Lựa Chọn Hành Động</h1>
-        <div class="action-menu">
-            <a href="doipin.html" class="action-button swap">Đổi Pin</a>
-            <a href="laypin.html" class="action-button get">Lấy Pin</a>
-        </div>
-    </div>
+    <script>
+        // --- JavaScript giữ nguyên, không cần thay đổi ---
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+        window.addEventListener('load', initWebSocket);
 
+        function initWebSocket() {
+            websocket = new WebSocket(gateway);
+            websocket.onopen  = () => console.log('Connection opened');
+            websocket.onclose = () => {
+                console.log('Connection closed');
+                setTimeout(initWebSocket, 2000);
+            };
+            websocket.onmessage = onMessage;
+        }
+
+        function onMessage(event) {
+            let data;
+            try { data = JSON.parse(event.data); } catch (e) { return; }
+
+            if (data.type === 'pinData') {
+                const cardElement = document.getElementById(`pin-${data.id}`);
+                if (cardElement) {
+                    const percentElement = cardElement.querySelector('.percent-text');
+                    const statusElement = cardElement.querySelector('.status-text');
+                    
+                    percentElement.textContent = `${data.percent}%`;
+                    statusElement.textContent = data.status;
+
+                    let statusClass = 'status-empty';
+
+                    switch (data.status) {
+                        case 'Sạc': statusClass = 'status-charging'; break;
+                        case 'Đầy': statusClass = 'status-full'; break;
+                        case 'Nhiệt Độ Cao':
+                        case 'Lỗi': statusClass = 'status-error'; break;
+                        case 'Trống':
+                        default: statusClass = 'status-empty'; break;
+                    }
+                    cardElement.className = `pin-card ${statusClass}`;
+                }
+            }
+        }
+    </script>
 </body>
 </html>

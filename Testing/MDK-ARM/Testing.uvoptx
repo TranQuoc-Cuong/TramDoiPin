@@ -153,7 +153,7 @@
         <Ww>
           <count>0</count>
           <WinNumber>1</WinNumber>
-          <ItemText>data_pin</ItemText>
+          <ItemText>pin_channels</ItemText>
         </Ww>
       </WatchWindow1>
       <WatchWindow2>

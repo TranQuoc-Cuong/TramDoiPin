@@ -30,7 +30,7 @@ void CMD_ParseServo(char* args) {
     }
 }
 
-void CMD_Process(char* command_buffer) {
+__weak void CMD_Process(char* command_buffer) {
     if (strncmp(command_buffer, "sac:", 4) == 0) {
         CMD_ParseSimple(command_buffer + 4, STATE_CHARGING);
     } 

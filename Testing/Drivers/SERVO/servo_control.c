@@ -35,3 +35,13 @@ void Servo_SetAngle(uint8_t servo_id, uint8_t angle) {
 
     __HAL_TIM_SET_COMPARE(servo_timer_handle, channel, pulse);
 }
+
+void All_Servo_Angle(uint8_t angle){
+	Servo_SetAngle(1, angle);
+	HAL_Delay(200);
+	Servo_SetAngle(2, angle);
+	HAL_Delay(200);
+	Servo_SetAngle(3, angle);
+	HAL_Delay(200);
+	Servo_SetAngle(4, angle);
+}

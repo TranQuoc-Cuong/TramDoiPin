@@ -39,6 +39,8 @@
 /* USER CODE BEGIN PTD */
 #define NGUONGPINTRONG 500.0f
 #define NGUONGNHIETDO 55.0f
+#define GOCMO 180
+#define GOCDONG 10
 
 /* USER CODE END PTD */
 
@@ -79,9 +81,6 @@ static void MX_USART1_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-INA219_Data_t data_pin[4];
-
-float temperatures[4]; 
 const uint32_t ADC_Channel[] = {
 	ADC_CHANNEL_0,
 	ADC_CHANNEL_1,
@@ -90,65 +89,198 @@ const uint32_t ADC_Channel[] = {
 };
 
 uint32_t last_sensor_update_tick = 0;
-uint8_t charge_done_counter[4] = {0}; // Mảng đếm số lần dòng thấp cho mỗi kênh
-uint32_t charge_done_timestamp[4] = {0}; // Mảng lưu mốc thời gian cho mỗi kênh
-
-uint32_t last_check_percent[4] = {0};
 
 typedef enum{
 	pin_trong,
 	pin_sac,
 	pin_day,
 	pin_qua_nhiet,
-	pin_loi,
+	pin_loi
 } status_channel_t;
 
-status_channel_t pin_channels[4];
-status_channel_t previous_pin_channels[4];
+typedef enum {
+	LAP_PIN,
+	KHONG_CO_PIN,
+	CHO_LENH,
+	LAY_PIN_CHO_THAO,
+	DOI_PIN_CHO_LAP_VAO,
+	DOI_PIN_DANG_KIEM_TRA,
+	DOI_PIN_CHO_THAO_RA
+}status_machine_t;
 
-uint8_t check_percent_pin[4] = {0};
+status_machine_t status_machine = CHO_LENH;
+
+typedef	struct{
+	INA219_Data_t data_pin;
+	float temperatures; 
+	
+	status_channel_t status;
+	
+	uint8_t charge_done_counter;
+	uint32_t charge_done_timestamp;
+	
+	uint8_t check_percent_pin;
+	uint32_t last_check_percent;
+}pin_channel_t;
+
+pin_channel_t pin_channels[4] = {0};
+
+uint8_t id_pin_percent_max = 0;
+uint8_t id_pin_trong = 0;
 
 const char* get_channel_state_string(status_channel_t state) {
     switch(state) {
         case pin_trong:     return "T";
-        case pin_sac:       return "S";
-        case pin_day:       return "D";
+        case pin_sac:  		  return "S";
+        case pin_day: 		  return "D";
         case pin_qua_nhiet: return "N";
         case pin_loi:       return "L";
         default:            return "R";
     }
 }
 
+static uint8_t percent[4];
+
 void report_status_task(void) {
-    char report_buffer[128];
-		static uint8_t percent[4];
+    char report_buffer[50];
     for (int i = 0; i < 4; i++) 
 	{
-		if(pin_channels[i] == pin_trong){
+		if(pin_channels[i].status == pin_trong){
 			percent[i] = 0;
-			check_percent_pin[i] = 0;
+			pin_channels[i].check_percent_pin = 0;
 		}
-		if(pin_channels[i] == pin_day){
+		if(pin_channels[i].status == pin_day){
 			percent[i] = 100;
-			check_percent_pin[i] = 0;
+			pin_channels[i].check_percent_pin = 0;
 		}
 		
-		if(check_percent_pin[i] == 1){
-			percent[i] = data_pin[i].soc_percent;
-			check_percent_pin[i] = 0;
+		if(pin_channels[i].check_percent_pin == 1){
+			percent[i] = pin_channels[i].data_pin.soc_percent;
+			pin_channels[i].check_percent_pin = 0;
 		}
     sprintf(report_buffer, "P:%d,%%:%d,C:%s,V:%.2f,I:%.2f,T:%.1f\n",
                 i + 1,
 								percent[i],
-                get_channel_state_string(pin_channels[i]),
-                data_pin[i].voltage,
-                data_pin[i].current,
-                temperatures[i]);
+                get_channel_state_string(pin_channels[i].status),
+                pin_channels[i].data_pin.voltage,
+                pin_channels[i].data_pin.current,
+                pin_channels[i].temperatures);
         UART_Handler_TransmitString(report_buffer);
     }
 		UART_Handler_TransmitString("\n");
 }
 
+uint8_t fit_pin_thao = 5;
+uint8_t fit_pin_lap = 5;
+
+void CMD_Process(char* command_buffer) {
+		if (strncmp(command_buffer, "laypin:", 7) == 0) {
+			if (id_pin_percent_max < 4) { 
+				fit_pin_thao = id_pin_percent_max;
+				status_machine = LAY_PIN_CHO_THAO;
+				char tin_gui[14];
+				sprintf(tin_gui, "laypin:%d.\n", fit_pin_thao + 1);
+				UART_Handler_TransmitString(tin_gui);
+			} 
+			else {
+				UART_Handler_TransmitString("Khong co pin san sang de lay!\r\n");
+			}
+		}
+		else if (strncmp(command_buffer, "back:", 5) == 0){
+			status_machine = CHO_LENH;
+		}
+		else if (strncmp(command_buffer, "doipin:", 7) == 0) {
+			if (id_pin_trong < 4 && id_pin_percent_max < 4) {
+					fit_pin_thao = id_pin_percent_max;
+					fit_pin_lap = id_pin_trong;
+					status_machine = DOI_PIN_CHO_LAP_VAO;
+					char tin_gui[21];
+					sprintf(tin_gui, "doipin:%d,laypin:%d\n", fit_pin_lap + 1, fit_pin_thao + 1);
+					UART_Handler_TransmitString(tin_gui);
+			} else {
+					UART_Handler_TransmitString("Khong the doi pin luc nay!\r\n");
+			}
+		}
+		else if (strncmp(command_buffer, "lappin:", 7) == 0){
+			uint8_t so_pin_trong = 0;
+			for(uint8_t i = 0; i < 4; i++){
+				if(pin_channels[i].status == pin_trong) ++so_pin_trong;				
+			}
+			if(so_pin_trong == 0) UART_Handler_TransmitString("lappin:0\n");
+			else {UART_Handler_TransmitString("lappin:1\n"); status_machine = LAP_PIN;}
+		}
+    else if (strncmp(command_buffer, "sac:", 4) == 0) {
+        CMD_ParseSimple(command_buffer + 4, STATE_CHARGING);
+    } 
+    else if (strncmp(command_buffer, "test:", 5) == 0) {
+        CMD_ParseSimple(command_buffer + 5, STATE_TESTING);
+    } 
+    else if (strncmp(command_buffer, "pinoff:", 7) == 0) {
+        CMD_ParseSimple(command_buffer + 7, STATE_IDLE);
+    } 
+    else if (strncmp(command_buffer, "servo:", 6) == 0) {
+        CMD_ParseServo(command_buffer + 6);
+    }
+}
+
+//cac ham kt pin
+
+	void kiemTraPinMoiLapVao(uint8_t id, pin_channel_t *id_channel) {
+			if (id_channel->data_pin.voltage > NGUONGPINTRONG) {
+					BatteryHealth_t health_status = Diagnose_Check(id + 1, id_channel->temperatures);
+					
+					if (health_status == BATT_UNSAFE_TEMP || health_status == BATT_DEAD) {
+							id_channel->status = pin_loi;
+					} else {
+							health_status = Diagnose_RunIRTest(id + 1);
+							if (health_status == BATT_HEALTHY) {
+									if (id_channel->data_pin.soc_percent >= 98.0f) {
+											id_channel->status = pin_day;
+											if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
+									} else {
+											id_channel->status = pin_sac;
+											if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
+											id_channel->check_percent_pin = 1;
+											id_channel->last_check_percent = HAL_GetTick();
+									}
+							} else {
+									id_channel->status = pin_loi;
+							}
+					}
+			}
+	}
+
+
+	void xuLyTrangThaiSac(pin_channel_t *channel) {
+			if (channel->temperatures > NGUONGNHIETDO || channel->temperatures < 5.0f) { 
+					channel->status = pin_qua_nhiet; // Coi mọi giá trị bất thường là quá nhiệt (hoặc lỗi)
+					return; 
+			}
+			
+			if ((channel->data_pin.current < 1.6 && channel->data_pin.current > -2.3) || (channel->data_pin.current < 0.1 && channel->data_pin.current > -1.0)) {
+					if (channel->charge_done_counter == 0) {
+							channel->charge_done_timestamp = HAL_GetTick();
+					}
+					channel->charge_done_counter++;
+
+					if (channel->charge_done_counter >= 3) {
+							if (channel->data_pin.current < 0.1 && channel->data_pin.current > -1.0) {
+									channel->status = pin_trong;
+							} else { // (channel->data_pin.current < 1.6 && channel->data_pin.current > -2.3)
+									channel->status = pin_day;
+							}
+							channel->charge_done_counter = 0; 
+					}
+			} else {
+					channel->charge_done_counter = 0;
+			}
+			
+			if (channel->charge_done_counter > 0 && channel->charge_done_counter < 3) {
+					if (HAL_GetTick() - channel->charge_done_timestamp > 6000) {
+							channel->charge_done_counter = 0;
+					}
+			}
+	}
 
 /* USER CODE END 0 */
 
@@ -192,14 +324,14 @@ int main(void)
 	Servos_Init(&htim2); // Them tat ca kenh Servo
 	INA219_Manager_Init(&hi2c1); // khoi  tao cam bien dong ap
 	
-	char rx_line_buffer[100]; // Buffer g?c d? nh?n d? li?u
-	char cmd_buffer[100];     // Buffer sao ch�p d? x? l� l?nh
+	char rx_line_buffer[100];
+	char cmd_buffer[100];     
 	
 	for(uint8_t i = 0; i < 4; i++){
-		pin_channels[i] = pin_trong;
-		previous_pin_channels[i] = pin_trong; // Đồng bộ hóa trạng thái cũ
-		Servo_SetAngle(i + 1, 180); // Quay servo ra vị trí chờ pin
+		pin_channels[i].status = pin_trong;
   };
+	
+	All_Servo_Angle(GOCMO);
 	
 	last_sensor_update_tick = HAL_GetTick();
 	
@@ -216,6 +348,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 		
+		
     if (UART_Handler_GetLine(rx_line_buffer, 100))
     {
         strcpy(cmd_buffer, rx_line_buffer);
@@ -225,139 +358,209 @@ int main(void)
 		
 		if (HAL_GetTick() - last_sensor_update_tick >= 2000) {
 			
-		last_sensor_update_tick = HAL_GetTick();
-			
-		for(uint8_t i = 0; i < 4; i++){
-			temperatures[i] = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
-			data_pin[i] = INA219_Manager_Read(i + 1);
-    }
-		
-		for(uint8_t i = 0; i < 4; i++){
-			switch(pin_channels[i]){
-				
-				case pin_trong:
-					if(data_pin[i].voltage > NGUONGPINTRONG){ 
-						BatteryHealth_t health_status = Diagnose_Check(i + 1, temperatures[i]);
-						if(health_status == BATT_UNSAFE_TEMP || health_status == BATT_DEAD){
-							pin_channels[i] = pin_loi;
-						} 
-						else {
-							health_status = Diagnose_RunIRTest(i + 1);
-							if (health_status == BATT_HEALTHY) {
-								if (data_pin[i].soc_percent >= 98.0f) {
-									pin_channels[i] = pin_day;
-								} else {
-									pin_channels[i] = pin_sac;
-									check_percent_pin[i] = 1;
-									last_check_percent[i] = HAL_GetTick();
-								}
-							} else {
-									pin_channels[i] = pin_loi;
+			last_sensor_update_tick = HAL_GetTick();
+
+			for(uint8_t i = 0; i < 4; i++){
+					HAL_Delay(100);
+					pin_channels[i].temperatures = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
+					pin_channels[i].data_pin = INA219_Manager_Read(i + 1);
+					HAL_Delay(200);
+			}
+
+			uint8_t temp_max_percent = 0;
+			uint8_t found_empty_slot = 0;
+			id_pin_percent_max = 5; 
+			id_pin_trong = 5;       
+			if(status_machine == CHO_LENH) status_machine = KHONG_CO_PIN;
+			for (int i = 0; i < 4; i++) {
+					if(pin_channels[i].status == pin_trong) {
+							percent[i] = 0;
+					} else if(pin_channels[i].status == pin_day) {
+							if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
+							percent[i] = 100;
+					} else if(pin_channels[i].check_percent_pin == 1) { 
+							percent[i] = pin_channels[i].data_pin.soc_percent;
+							pin_channels[i].check_percent_pin = 0;
+					}
+
+					if ((pin_channels[i].status == pin_sac || pin_channels[i].status == pin_day) && percent[i] >= temp_max_percent) {
+							if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
+							temp_max_percent = percent[i];
+							id_pin_percent_max = i;
+					}
+
+					if ((pin_channels[i].status == pin_trong) && !found_empty_slot) {
+							id_pin_trong = i;
+							found_empty_slot = 1;
+					}
+			}			
+			report_status_task();
+		}
+
+		switch (status_machine)
+		{				
+			case LAP_PIN:
+				for(uint8_t i = 0; i < 4; i++){
+					if(pin_channels[i].status == pin_trong || pin_channels[i].status == pin_loi){
+						Servo_SetAngle(i + 1, GOCMO);
+						
+						if(pin_channels[i].status == pin_loi){
+							if(pin_channels[i].data_pin.voltage < NGUONGPINTRONG)
+								pin_channels[i].status = pin_trong;
+						}
+						
+						if(pin_channels[i].data_pin.voltage > NGUONGPINTRONG){
+							kiemTraPinMoiLapVao(i, &(pin_channels[i]));
+							
+							if (pin_channels[i].status == pin_sac || pin_channels[i].status == pin_day) {
+								All_Servo_Angle(GOCDONG); 
+								status_machine = CHO_LENH; 
+								break; 
+							}
+							else if (pin_channels[i].status == pin_loi) {
+								Servo_SetAngle(i + 1, GOCMO);
 							}
 						}
 					}
+				}
 				break;
+				
+			case KHONG_CO_PIN:
+				All_Servo_Angle(GOCMO); 
+			
+				for(uint8_t i = 0; i < 4; i++){
+					Channel_SetState(i + 1, STATE_IDLE);
+					kiemTraPinMoiLapVao(i, &(pin_channels[i]));
+				}
+				break;
+				
+			case CHO_LENH:
+				All_Servo_Angle(GOCDONG); 
+			
+				for (uint8_t i = 0; i < 4; i++) {
+					switch(pin_channels[i].status) {
+						case pin_trong:
+							Channel_SetState(i + 1, STATE_IDLE);
+							kiemTraPinMoiLapVao(i, &(pin_channels[i]));
+							break;
+			
+						case pin_sac:
+							xuLyTrangThaiSac(&(pin_channels[i]));
+							Channel_SetState(i + 1, STATE_CHARGING);
+							break;
+						
+						case pin_qua_nhiet:
+							if(pin_channels[i].temperatures < NGUONGNHIETDO - 5) {
+								pin_channels[i].status = pin_sac;
+							}
+							Channel_SetState(i + 1, STATE_IDLE);
+							break;
+							
+						case pin_day:
+						case pin_loi:
+							if(pin_channels[i].data_pin.voltage < NGUONGPINTRONG) {
+								pin_channels[i].status = pin_trong;
+							}
+							Channel_SetState(i + 1, STATE_IDLE);
+							break;
+			
+						default:
+						
+						break;
+					}
+				}
+			break;
+				
+			case LAY_PIN_CHO_THAO:
+					Servo_SetAngle(fit_pin_thao + 1, GOCMO);
+					Channel_SetState(fit_pin_thao + 1, STATE_IDLE);
+			
+					if (pin_channels[fit_pin_thao].data_pin.voltage < NGUONGPINTRONG) {
+							pin_channels[fit_pin_thao].status = pin_trong;
+							Servo_SetAngle(fit_pin_thao + 1, GOCDONG); 
+							fit_pin_thao = 5; 
+							status_machine = CHO_LENH; 
+					}
+					break;
 
-				case pin_sac:
-					if(temperatures[i] > NGUONGNHIETDO){
-						pin_channels[i] = pin_qua_nhiet;
-					} 
-					if ((data_pin[i].current < 1.6 && data_pin[i].current > -2.3) || (data_pin[i].current < 0.1 && data_pin[i].current > -1.0))
+			case DOI_PIN_CHO_LAP_VAO:
+					for(uint8_t i = 0; i < 4; i++)
 					{
-						if (charge_done_counter[i] == 0) {
-							charge_done_timestamp[i] = HAL_GetTick();
+						if(i == fit_pin_lap){
+							Servo_SetAngle(fit_pin_lap + 1, GOCMO);
 						}
-							charge_done_counter[i]++;
-						if(charge_done_counter[i] >= 3 && (data_pin[i].current < 0.1 && data_pin[i].current > -1.0)){
-							pin_channels[i] = pin_trong;
-							charge_done_counter[i] = 0;
-						}
-						else if(charge_done_counter[i] >= 3 && (data_pin[i].current < 1.6 && data_pin[i].current > -2.3)){
-							pin_channels[i] = pin_day;
-							charge_done_counter[i] = 0;
+						else{
+							Servo_SetAngle(i + 1, GOCDONG);
 						}
 					}
-					else {
-						charge_done_counter[i] = 0;
+					
+					if (pin_channels[fit_pin_lap].data_pin.voltage > NGUONGPINTRONG) {
+							status_machine = DOI_PIN_DANG_KIEM_TRA; 
+					}
+					break;
+			
+			case DOI_PIN_DANG_KIEM_TRA:
+					kiemTraPinMoiLapVao(fit_pin_lap, &pin_channels[fit_pin_lap]);
+					if (pin_channels[fit_pin_lap].status == pin_sac || pin_channels[fit_pin_lap].status == pin_day) {
+							Servo_SetAngle(fit_pin_lap + 1, GOCDONG);
+							status_machine = DOI_PIN_CHO_THAO_RA; 
+					}
+					
+					if(pin_channels[fit_pin_lap].status == pin_loi){
+							if(pin_channels[fit_pin_lap].data_pin.voltage < NGUONGPINTRONG)
+								pin_channels[fit_pin_lap].status = pin_trong;
 					}
 
-					if (charge_done_counter[i] > 0 && charge_done_counter[i] < 3) {
-						if (HAL_GetTick() - charge_done_timestamp[i] > 6000) {
-								charge_done_counter[i] = 0;
+					else if (pin_channels[fit_pin_lap].status == pin_loi) {
+							status_machine = DOI_PIN_CHO_LAP_VAO; 
+					}
+					break;
+
+			case DOI_PIN_CHO_THAO_RA:
+					for(uint8_t i = 0; i < 4; i++)
+					{
+						if(i == fit_pin_thao){
+							Servo_SetAngle(fit_pin_thao + 1, GOCMO);
+						}
+						else{
+							Servo_SetAngle(i + 1, GOCDONG);
 						}
 					}
-				break;
-
-				case pin_qua_nhiet:
-					if(temperatures[i] < NGUONGNHIETDO - 5){ // Thêm một khoảng an toàn
-						pin_channels[i] = pin_sac;
+					Channel_SetState(fit_pin_thao + 1, STATE_IDLE);
+					
+					if (pin_channels[fit_pin_thao].data_pin.voltage < NGUONGPINTRONG) {
+							pin_channels[fit_pin_thao].status = pin_trong;
+							Servo_SetAngle(fit_pin_thao + 1, GOCDONG); 
+						
+							fit_pin_thao = 5;
+							fit_pin_lap = 5;
+							status_machine = CHO_LENH;
 					}
-				break;
-
-				case pin_loi:
-				case pin_day:
-					if(data_pin[i].voltage < NGUONGPINTRONG){ // Ngưỡng rút pin
-						pin_channels[i] = pin_trong;
-					}
-				break;
+					break;
+		}
+			
+		for (uint8_t i = 0; i < 4; i++) {
+			if (pin_channels[i].status == pin_sac && HAL_GetTick() - pin_channels[i].last_check_percent >= 300000) {
+					Channel_SetState(i + 1, STATE_IDLE); // Ngắt sạc
+					HAL_Delay(100);
+					pin_channels[i].data_pin = INA219_Manager_Read(i + 1);
+					pin_channels[i].last_check_percent = HAL_GetTick();
+					pin_channels[i].check_percent_pin = 1;
+					Channel_SetState(i + 1, STATE_CHARGING); // Bật sạc lại
 			}
 		}
-		report_status_task();
-	}
-		
-	for (uint8_t i = 0; i < 4; i++) {
-    if (pin_channels[i] == pin_sac && HAL_GetTick() - last_check_percent[i] >= 300000) {
-        Channel_SetState(i + 1, STATE_IDLE); // Ngắt sạc
-        HAL_Delay(100);
-        data_pin[i] = INA219_Manager_Read(i + 1);
-        last_check_percent[i] = HAL_GetTick();
-				check_percent_pin[i] = 1;
-				Channel_SetState(i + 1, STATE_CHARGING); // Bật sạc lại
-    }
-	}
-		
-		for(uint8_t i = 0; i < 4; i++){
-			if(pin_channels[i] != previous_pin_channels[i]){
-				switch(pin_channels[i]){
-					
-					case pin_trong:
-						Channel_SetState(i + 1, STATE_IDLE);
-            Servo_SetAngle(i + 1, 180); // Mở cửa chờ
-          break;
-					
-					case pin_sac:
-						Channel_SetState(i + 1, STATE_CHARGING);
-            Servo_SetAngle(i + 1, 10);   // Đóng cửa sạc
-          break;
-          
-					case pin_day:
-            Channel_SetState(i + 1, STATE_IDLE);
-            Servo_SetAngle(i + 1, 180); // Đẩy pin ra
-          break;
-                   
-					case pin_loi:
-            Channel_SetState(i + 1, STATE_IDLE);
-            Servo_SetAngle(i + 1, 180); // Đẩy pin ra
-          break;
-                    
-					case pin_qua_nhiet:
-            Channel_SetState(i + 1, STATE_IDLE); // Tạm ngắt sạc
-            break;
-        }
-        previous_pin_channels[i] = pin_channels[i]; // Cập nhật trạng thái cũ
-			}
-		}
+
 		
 //    if (HAL_GetTick() - last_sensor_update_tick >= 1000) 
 //		{  
 //    last_sensor_update_tick = HAL_GetTick();
 //    for(uint8_t i = 0; i < 4; i++) {
-//        temperatures[i] = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
-//        data_pin[i] = INA219_Manager_Read(i + 1);
+//      //  temperatures[i] = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
+//      //  data_pin[i] = INA219_Manager_Read(i + 1);
 //        
 //        char data_transmit[100];
-//        sprintf(data_transmit, "DATA%d: V=%.2f, C=%.2fmA, T=%.1f\r\n", 
-//                i+1, data_pin[i].voltage, data_pin[i].current, temperatures[i]);
+//   //     sprintf(data_transmit, "DATA%d: V=%.2f, C=%.2fmA, T=%.1f\r\n", 
+//  //              i+1, data_pin[i].voltage, data_pin[i].current, temperatures[i]);
 //        UART_Handler_TransmitString(data_transmit);
 //    }
 //		}  /* USER CODE END 3 */
