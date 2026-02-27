@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F103xB</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../Drivers/INA219;../Drivers/BATTERY;../Drivers/SERVO;../Drivers/NTC;../Drivers/RINGBUFFER;../Drivers/UART;../Drivers/CMD;..\Services</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;../Drivers/INA219;../Drivers/BATTERY;../Drivers/SERVO;../Drivers/NTC;../Drivers/RINGBUFFER;../Drivers/UART;../Drivers/CMD;..\Services;..\Drivers\DELAY</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -394,61 +394,6 @@
           <GroupName>Application/User/Core</GroupName>
           <Files>
             <File>
-              <FileName>INA219.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\INA219\INA219.c</FilePath>
-            </File>
-            <File>
-              <FileName>battery_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\BATTERY\battery_control.c</FilePath>
-            </File>
-            <File>
-              <FileName>servo_control.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\SERVO\servo_control.c</FilePath>
-            </File>
-            <File>
-              <FileName>servo_control.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Drivers\SERVO\servo_control.h</FilePath>
-            </File>
-            <File>
-              <FileName>ina219_manager.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\INA219\ina219_manager.c</FilePath>
-            </File>
-            <File>
-              <FileName>ina219_manager.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Drivers\INA219\ina219_manager.h</FilePath>
-            </File>
-            <File>
-              <FileName>ntc_sensor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\NTC\ntc_sensor.c</FilePath>
-            </File>
-            <File>
-              <FileName>ringbuffer.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\RINGBUFFER\ringbuffer.c</FilePath>
-            </File>
-            <File>
-              <FileName>uart_dn.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\UART\uart_dn.c</FilePath>
-            </File>
-            <File>
-              <FileName>handle_cmd.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Drivers\CMD\handle_cmd.c</FilePath>
-            </File>
-            <File>
-              <FileName>handle_cmd.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Drivers\CMD\handle_cmd.h</FilePath>
-            </File>
-            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/main.c</FilePath>
@@ -462,16 +407,6 @@
               <FileName>stm32f1xx_hal_msp.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32f1xx_hal_msp.c</FilePath>
-            </File>
-            <File>
-              <FileName>battery_diagnostics.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Services\battery_diagnostics.c</FilePath>
-            </File>
-            <File>
-              <FileName>battery_diagnostics.h</FileName>
-              <FileType>5</FileType>
-              <FilePath>..\Services\battery_diagnostics.h</FilePath>
             </File>
           </Files>
         </Group>
@@ -878,6 +813,96 @@
               <FileName>system_stm32f1xx.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/system_stm32f1xx.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>INA219</GroupName>
+          <Files>
+            <File>
+              <FileName>ina219_manager.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\INA219\ina219_manager.c</FilePath>
+            </File>
+            <File>
+              <FileName>INA219.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\INA219\INA219.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>BATTERY</GroupName>
+          <Files>
+            <File>
+              <FileName>battery_diagnostics.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Services\battery_diagnostics.c</FilePath>
+            </File>
+            <File>
+              <FileName>battery_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\BATTERY\battery_control.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>SERVO</GroupName>
+          <Files>
+            <File>
+              <FileName>servo_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\SERVO\servo_control.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>NTC</GroupName>
+          <Files>
+            <File>
+              <FileName>ntc_sensor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\NTC\ntc_sensor.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>RINGBUFF</GroupName>
+          <Files>
+            <File>
+              <FileName>ringbuffer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\RINGBUFFER\ringbuffer.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>UART</GroupName>
+          <Files>
+            <File>
+              <FileName>uart_dn.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\UART\uart_dn.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>HANDLE</GroupName>
+          <Files>
+            <File>
+              <FileName>handle_cmd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Drivers\CMD\handle_cmd.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>DELAY</GroupName>
+          <Files>
+            <File>
+              <FileName>soft_timer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Drivers\DELAY\soft_timer.h</FilePath>
             </File>
           </Files>
         </Group>

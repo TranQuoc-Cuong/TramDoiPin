@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <string.h>
 
-
 #include "battery_control.h"
 #include "servo_control.h"
 #include "ina219_manager.h"
@@ -32,15 +31,16 @@
 #include "handle_cmd.h"
 #include "uart_dn.h"
 #include "battery_diagnostics.h"
+#include "soft_timer.h"
 
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-#define NGUONGPINTRONG 500.0f
-#define NGUONGNHIETDO 55.0f
-#define GOCMO 180
-#define GOCDONG 10
+const float threshold_pin_empty = 800.0f;
+const float threshold_temperature = 55.0f;
+const uint8_t angle_open = 180U;
+const uint8_t angle_close = 40U;
 
 /* USER CODE END PTD */
 
@@ -85,202 +85,170 @@ const uint32_t ADC_Channel[] = {
 	ADC_CHANNEL_0,
 	ADC_CHANNEL_1,
 	ADC_CHANNEL_2,
-	ADC_CHANNEL_3
 };
 
-uint32_t last_sensor_update_tick = 0;
+SoftTimer timer_sensor;
 
-typedef enum{
-	pin_trong,
-	pin_sac,
-	pin_day,
-	pin_qua_nhiet,
-	pin_loi
-} status_channel_t;
+volatile SystemState status_machine = IDLE_WAIT_CMD;
 
-typedef enum {
-	LAP_PIN,
-	KHONG_CO_PIN,
-	CHO_LENH,
-	LAY_PIN_CHO_THAO,
-	DOI_PIN_CHO_LAP_VAO,
-	DOI_PIN_DANG_KIEM_TRA,
-	DOI_PIN_CHO_THAO_RA
-}status_machine_t;
-
-status_machine_t status_machine = CHO_LENH;
-
-typedef	struct{
-	INA219_Data_t data_pin;
-	float temperatures; 
-	
-	status_channel_t status;
-	
-	uint8_t charge_done_counter;
-	uint32_t charge_done_timestamp;
-	
-	uint8_t check_percent_pin;
-	uint32_t last_check_percent;
-}pin_channel_t;
-
-pin_channel_t pin_channels[4] = {0};
+PinChannel pin_channels[3] = {0};
 
 uint8_t id_pin_percent_max = 0;
-uint8_t id_pin_trong = 0;
+uint8_t id_pin_empty = 0;
 
-const char* get_channel_state_string(status_channel_t state) {
-    switch(state) {
-        case pin_trong:     return "T";
-        case pin_sac:  		  return "S";
-        case pin_day: 		  return "D";
-        case pin_qua_nhiet: return "N";
-        case pin_loi:       return "L";
-        default:            return "R";
-    }
-}
+volatile int8_t esp32_pin_check_status = -1; 
+uint32_t timestamp_gui_checkpin = 0; // tý coi nó là gì sua nó lai
 
-static uint8_t percent[4];
+#define ESP32_CHECK_TIMEOUT 5000    // này n?a    
 
-void report_status_task(void) {
-    char report_buffer[50];
-    for (int i = 0; i < 4; i++) 
-	{
-		if(pin_channels[i].status == pin_trong){
-			percent[i] = 0;
-			pin_channels[i].check_percent_pin = 0;
-		}
-		if(pin_channels[i].status == pin_day){
-			percent[i] = 100;
-			pin_channels[i].check_percent_pin = 0;
-		}
-		
-		if(pin_channels[i].check_percent_pin == 1){
-			percent[i] = pin_channels[i].data_pin.soc_percent;
-			pin_channels[i].check_percent_pin = 0;
-		}
-    sprintf(report_buffer, "P:%d,%%:%d,C:%s,V:%.2f,I:%.2f,T:%.1f\n",
-                i + 1,
-								percent[i],
-                get_channel_state_string(pin_channels[i].status),
-                pin_channels[i].data_pin.voltage,
-                pin_channels[i].data_pin.current,
-                pin_channels[i].temperatures);
-        UART_Handler_TransmitString(report_buffer);
-    }
-		UART_Handler_TransmitString("\n");
-}
+#define CHARGE_FULL_COUNTER_LIMIT  20
 
-uint8_t fit_pin_thao = 5;
-uint8_t fit_pin_lap = 5;
+uint8_t id_pin_dang_kiem_tra = 4; 
 
-void CMD_Process(char* command_buffer) {
-		if (strncmp(command_buffer, "laypin:", 7) == 0) {
-			if (id_pin_percent_max < 4) { 
-				fit_pin_thao = id_pin_percent_max;
-				status_machine = LAY_PIN_CHO_THAO;
-				char tin_gui[14];
-				sprintf(tin_gui, "laypin:%d.\n", fit_pin_thao + 1);
-				UART_Handler_TransmitString(tin_gui);
-			} 
-			else {
-				UART_Handler_TransmitString("Khong co pin san sang de lay!\r\n");
-			}
-		}
-		else if (strncmp(command_buffer, "back:", 5) == 0){
-			status_machine = CHO_LENH;
-		}
-		else if (strncmp(command_buffer, "doipin:", 7) == 0) {
-			if (id_pin_trong < 4 && id_pin_percent_max < 4) {
-					fit_pin_thao = id_pin_percent_max;
-					fit_pin_lap = id_pin_trong;
-					status_machine = DOI_PIN_CHO_LAP_VAO;
-					char tin_gui[21];
-					sprintf(tin_gui, "doipin:%d,laypin:%d\n", fit_pin_lap + 1, fit_pin_thao + 1);
-					UART_Handler_TransmitString(tin_gui);
-			} else {
-					UART_Handler_TransmitString("Khong the doi pin luc nay!\r\n");
-			}
-		}
-		else if (strncmp(command_buffer, "lappin:", 7) == 0){
-			uint8_t so_pin_trong = 0;
-			for(uint8_t i = 0; i < 4; i++){
-				if(pin_channels[i].status == pin_trong) ++so_pin_trong;				
-			}
-			if(so_pin_trong == 0) UART_Handler_TransmitString("lappin:0\n");
-			else {UART_Handler_TransmitString("lappin:1\n"); status_machine = LAP_PIN;}
-		}
-    else if (strncmp(command_buffer, "sac:", 4) == 0) {
-        CMD_ParseSimple(command_buffer + 4, STATE_CHARGING);
-    } 
-    else if (strncmp(command_buffer, "test:", 5) == 0) {
-        CMD_ParseSimple(command_buffer + 5, STATE_TESTING);
-    } 
-    else if (strncmp(command_buffer, "pinoff:", 7) == 0) {
-        CMD_ParseSimple(command_buffer + 7, STATE_IDLE);
-    } 
-    else if (strncmp(command_buffer, "servo:", 6) == 0) {
-        CMD_ParseServo(command_buffer + 6);
-    }
-}
-
-//cac ham kt pin
-
-	void kiemTraPinMoiLapVao(uint8_t id, pin_channel_t *id_channel) {
-			if (id_channel->data_pin.voltage > NGUONGPINTRONG) {
-					BatteryHealth_t health_status = Diagnose_Check(id + 1, id_channel->temperatures);
-					
-					if (health_status == BATT_UNSAFE_TEMP || health_status == BATT_DEAD) {
-							id_channel->status = pin_loi;
-					} else {
-							health_status = Diagnose_RunIRTest(id + 1);
-							if (health_status == BATT_HEALTHY) {
-									if (id_channel->data_pin.soc_percent >= 98.0f) {
-											id_channel->status = pin_day;
-											if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
-									} else {
-											id_channel->status = pin_sac;
-											if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
-											id_channel->check_percent_pin = 1;
-											id_channel->last_check_percent = HAL_GetTick();
-									}
-							} else {
-									id_channel->status = pin_loi;
-							}
-					}
-			}
+const char* get_channel_state_string(StatusChannel state) {
+	switch(state) {
+		case pin_empty:       return "T";
+		case pin_charge:  		return "S";
+		case pin_full: 		    return "D";
+		case pin_over_heat:   return "N";
+		case pin_error:       return "L";
+		default:              return "R";
 	}
+}
 
+uint8_t percent[3];
 
-	void xuLyTrangThaiSac(pin_channel_t *channel) {
-			if (channel->temperatures > NGUONGNHIETDO || channel->temperatures < 5.0f) { 
-					channel->status = pin_qua_nhiet; // Coi mọi giá trị bất thường là quá nhiệt (hoặc lỗi)
-					return; 
-			}
+void ReportStatusTask(void) {
+	char report_buffer[50];
+
+	for (int i = 0; i < 3; i++) {
+	if(pin_channels[i].status == pin_empty) {
+		percent[i] = 0;
+		pin_channels[i].check_percent_pin = 0;
+	}
+	
+	if(pin_channels[i].status == pin_full) {
+		percent[i] = 100;
+		pin_channels[i].check_percent_pin = 0;
+	}
+	
+	if(pin_channels[i].check_percent_pin == 1) {
+		percent[i] = pin_channels[i].data_pin.soc_percent;
+		pin_channels[i].check_percent_pin = 0;
+	}
+	
+	sprintf(report_buffer, "P:%d,%%:%d,C:%s,V:%.2f,I:%.2f,T:%.1f\n",
+							i + 1,
+							percent[i],
+							get_channel_state_string(pin_channels[i].status),
+							pin_channels[i].data_pin.voltage,
+							pin_channels[i].data_pin.current,
+							pin_channels[i].temperatures);
+	
+	TransmitStringHandlerUART(report_buffer);
+	}
+	
+	TransmitStringHandlerUART("\n");
+}
+
+volatile uint8_t fit_pin_remove = 4;
+volatile uint8_t fit_pin_initial = 4;
+
+void CheckPinNewInitial(uint8_t id, PinChannel* id_channel) {
+	if (id_channel->data_pin.voltage > threshold_pin_empty) {
+		BatteryHealth health_status = CheckDiagnose(id + 1, id_channel->temperatures);
+		
+		if (health_status == BATT_UNSAFE_TEMP || health_status == BATT_DEAD) {
+			id_channel->status = pin_error;
+		} else {
+				health_status = RunIRTestDiagnose(id + 1);
 			
-			if ((channel->data_pin.current < 1.6 && channel->data_pin.current > -2.3) || (channel->data_pin.current < 0.1 && channel->data_pin.current > -1.0)) {
-					if (channel->charge_done_counter == 0) {
-							channel->charge_done_timestamp = HAL_GetTick();
+				if (health_status == BATT_HEALTHY) {
+					
+					if (id_channel->data_pin.soc_percent >= 98.0f) {
+						id_channel->status = pin_full;
+						
+						if(status_machine == ALL_SLOTS_EMPTY) status_machine = IDLE_WAIT_CMD;
+					} else {
+								id_channel->status = pin_charge;
+							
+								if(status_machine == ALL_SLOTS_EMPTY) status_machine = IDLE_WAIT_CMD;
+							
+								id_channel->check_percent_pin = 1;
+								id_channel->last_check_percent = HAL_GetTick();
 					}
-					channel->charge_done_counter++;
+				} else {
+						id_channel->status = pin_error;
+				}
+		}
+	}
+}
 
-					if (channel->charge_done_counter >= 3) {
-							if (channel->data_pin.current < 0.1 && channel->data_pin.current > -1.0) {
-									channel->status = pin_trong;
-							} else { // (channel->data_pin.current < 1.6 && channel->data_pin.current > -2.3)
-									channel->status = pin_day;
-							}
-							channel->charge_done_counter = 0; 
+
+void HandlerStateCharge(PinChannel* channel) {
+	
+	if (channel->temperatures <= (NTC_ERROR_VAL + 1.0f)) { 
+		channel->status = pin_error;
+		return; 
+	}
+	
+	if (channel->temperatures > threshold_temperature || channel->temperatures < 5.0f) { 
+		channel->status = pin_over_heat; 
+		
+		return; 
+	}
+	
+	if ((channel->data_pin.current < 1.6f && channel->data_pin.current > -2.3f) 
+	|| (channel->data_pin.current < 0.1f && channel->data_pin.current > -1.0f)) {
+		if (channel->charge_done_counter == 0) {
+			channel->charge_done_timestamp = HAL_GetTick();
+		}
+			channel->charge_done_counter++;
+
+			if (channel->charge_done_counter >= CHARGE_FULL_COUNTER_LIMIT) {
+					if (channel->data_pin.current < 0.1f && channel->data_pin.current > -1.0f) {
+							channel->status = pin_empty;
+					} else {
+							channel->status = pin_full;
 					}
-			} else {
+					channel->charge_done_counter = 0; 
+			}
+	} else {
+			channel->charge_done_counter = 0;
+	}
+	
+	if (channel->charge_done_counter > 0 && channel->charge_done_counter < 3) {
+			if (HAL_GetTick() - channel->charge_done_timestamp > 6000) {
 					channel->charge_done_counter = 0;
 			}
-			
-			if (channel->charge_done_counter > 0 && channel->charge_done_counter < 3) {
-					if (HAL_GetTick() - channel->charge_done_timestamp > 6000) {
-							channel->charge_done_counter = 0;
-					}
-			}
 	}
+}
+
+//Initial All Pin in Battery control
+void InitialAllPinBattery(void) {
+	InitChannelBattery(1, GPIOB, GPIO_PIN_13, GPIOB, GPIO_PIN_12);
+	InitChannelBattery(2, GPIOB, GPIO_PIN_15, GPIOB, GPIO_PIN_14);
+	InitChannelBattery(3, GPIOA, GPIO_PIN_7, GPIOB, GPIO_PIN_0);
+}
+
+//Initial Servo Pin
+void InitialAllPinServo(void) {
+	InitServo(1, &htim2, TIM_CHANNEL_1);
+	InitServo(2, &htim2, TIM_CHANNEL_2);
+	InitServo(3, &htim2, TIM_CHANNEL_3);
+}
+
+void InitialAllINA219(void) {
+	SetAddressManagerINA219(1, 0x40);
+	SetAddressManagerINA219(2, 0x41);
+	SetAddressManagerINA219(3, 0x44);
+}
+
+void InitialStateBeginChannelBattery(void) {
+	for(uint8_t i = 0; i < 3; i++) {
+		pin_channels[i].status = pin_empty;
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -319,23 +287,28 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 	HAL_ADCEx_Calibration_Start(&hadc1);
-	UART_Handler_Init(&huart1);
-	Channels_SetAll_Idle(); // trang thai mac dinh cua sac
-	Servos_Init(&htim2); // Them tat ca kenh Servo
-	INA219_Manager_Init(&hi2c1); // khoi  tao cam bien dong ap
+	
+	InitHandlerUART(&huart1);
+	
+	InitialAllPinBattery();
+	SetIdleAllChannelBattery();
+	
+	InitialAllPinServo();
+	OpenAllServo(angle_open);
+	
+	InitialStateBeginChannelBattery();
+	
+	InitialAllINA219();
+	if (0 == InitManagerINA219(&hi2c1)) {
+		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	}
 	
 	char rx_line_buffer[100];
 	char cmd_buffer[100];     
 	
-	for(uint8_t i = 0; i < 4; i++){
-		pin_channels[i].status = pin_trong;
-  };
+	StartSoftTimer(&timer_sensor, 500);
 	
-	All_Servo_Angle(GOCMO);
-	
-	last_sensor_update_tick = HAL_GetTick();
-	
-	UART_Handler_TransmitString("He thong khoi dong");
+	TransmitStringHandlerUART("He thong khoi dong");
 	
   /* USER CODE END 2 */
 
@@ -347,121 +320,129 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+		RunManagerServo();
 		
-		
-    if (UART_Handler_GetLine(rx_line_buffer, 100))
-    {
-        strcpy(cmd_buffer, rx_line_buffer);
-        CMD_Process(cmd_buffer);
-				UART_Handler_TransmitString("ok\r\n");
+    if (GetLineHandlerUART(rx_line_buffer, 100)) {
+			strcpy(cmd_buffer, rx_line_buffer);
+			CMDProcessAll(cmd_buffer);
+			TransmitStringHandlerUART("ok\r\n");
     }
 		
-		if (HAL_GetTick() - last_sensor_update_tick >= 2000) {
-			
-			last_sensor_update_tick = HAL_GetTick();
-
-			for(uint8_t i = 0; i < 4; i++){
-					HAL_Delay(100);
-					pin_channels[i].temperatures = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
-					pin_channels[i].data_pin = INA219_Manager_Read(i + 1);
-					HAL_Delay(200);
+		if (IsExpiredSoftTimer(&timer_sensor)) {
+			for(uint8_t id = 0; id < 3; id++){
+					pin_channels[id].temperatures = GetTemperatureNTC(&hadc1, ADC_Channel[id]);
+					pin_channels[id].data_pin = ReadManagerINA219(id + 1);
 			}
 
 			uint8_t temp_max_percent = 0;
 			uint8_t found_empty_slot = 0;
-			id_pin_percent_max = 5; 
-			id_pin_trong = 5;       
-			if(status_machine == CHO_LENH) status_machine = KHONG_CO_PIN;
-			for (int i = 0; i < 4; i++) {
-					if(pin_channels[i].status == pin_trong) {
-							percent[i] = 0;
-					} else if(pin_channels[i].status == pin_day) {
-							if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
-							percent[i] = 100;
-					} else if(pin_channels[i].check_percent_pin == 1) { 
-							percent[i] = pin_channels[i].data_pin.soc_percent;
-							pin_channels[i].check_percent_pin = 0;
-					}
+			id_pin_percent_max = 4; 
+			id_pin_empty = 4;    
+			
+			if(status_machine == IDLE_WAIT_CMD) status_machine = ALL_SLOTS_EMPTY;
+			for (int i = 0; i < 3; i++) {
+				if(pin_channels[i].status == pin_empty) {
+					percent[i] = 0;
+				} else if(pin_channels[i].status == pin_full) {
+					if(status_machine == ALL_SLOTS_EMPTY) status_machine = IDLE_WAIT_CMD;
+					percent[i] = 100;
+				} else if(pin_channels[i].check_percent_pin == 1) { 
+					percent[i] = pin_channels[i].data_pin.soc_percent;
+					pin_channels[i].check_percent_pin = 0;
+				}
 
-					if ((pin_channels[i].status == pin_sac || pin_channels[i].status == pin_day) && percent[i] >= temp_max_percent) {
-							if(status_machine == KHONG_CO_PIN) status_machine = CHO_LENH;
-							temp_max_percent = percent[i];
-							id_pin_percent_max = i;
-					}
+				if ((pin_channels[i].status == pin_charge || pin_channels[i].status == pin_full) && percent[i] >= temp_max_percent) {
+					if(status_machine == ALL_SLOTS_EMPTY) status_machine = IDLE_WAIT_CMD;
+					temp_max_percent = percent[i];
+					id_pin_percent_max = i;
+				}
 
-					if ((pin_channels[i].status == pin_trong) && !found_empty_slot) {
-							id_pin_trong = i;
-							found_empty_slot = 1;
-					}
+				if ((pin_channels[i].status == pin_empty) &&  (0 == found_empty_slot)) {
+					id_pin_empty = i;
+					found_empty_slot = 1;
+				}
 			}			
-			report_status_task();
+			ReportStatusTask();
 		}
 
-		switch (status_machine)
-		{				
-			case LAP_PIN:
-				for(uint8_t i = 0; i < 4; i++){
-					if(pin_channels[i].status == pin_trong || pin_channels[i].status == pin_loi){
-						Servo_SetAngle(i + 1, GOCMO);
+		switch (status_machine) {				
+			case INSTALL_BATTERY:
+				for(uint8_t i = 0; i < 3; i++){
+					if(pin_channels[i].status == pin_empty || pin_channels[i].status == pin_error){
+						SetAngleServo(i + 1, angle_open);
 						
-						if(pin_channels[i].status == pin_loi){
-							if(pin_channels[i].data_pin.voltage < NGUONGPINTRONG)
-								pin_channels[i].status = pin_trong;
+						if((pin_channels[i].status == pin_error) && (pin_channels[i].data_pin.voltage < threshold_pin_empty)) {
+								pin_channels[i].status = pin_empty;
 						}
 						
-						if(pin_channels[i].data_pin.voltage > NGUONGPINTRONG){
-							kiemTraPinMoiLapVao(i, &(pin_channels[i]));
+						if(pin_channels[i].data_pin.voltage > threshold_pin_empty){
+							esp32_pin_check_status = -1;
+							timestamp_gui_checkpin = HAL_GetTick();
+							id_pin_dang_kiem_tra = i;
 							
-							if (pin_channels[i].status == pin_sac || pin_channels[i].status == pin_day) {
-								All_Servo_Angle(GOCDONG); 
-								status_machine = CHO_LENH; 
-								break; 
-							}
-							else if (pin_channels[i].status == pin_loi) {
-								Servo_SetAngle(i + 1, GOCMO);
-							}
+							TransmitStringHandlerUART("checkpin\n");
+							
+							status_machine = INSTALL_WAIT_ESP_PROCESS;
+							break;
 						}
 					}
 				}
 				break;
 				
-			case KHONG_CO_PIN:
-				All_Servo_Angle(GOCMO); 
+			case ALL_SLOTS_EMPTY:
+				OpenAllServo(angle_open); 
 			
-				for(uint8_t i = 0; i < 4; i++){
-					Channel_SetState(i + 1, STATE_IDLE);
-					kiemTraPinMoiLapVao(i, &(pin_channels[i]));
+				for(uint8_t i = 0; i < 3; i++){
+					SetStateChannelBattery(i + 1, STATE_IDLE);
+					
+					if(pin_channels[i].data_pin.voltage > threshold_pin_empty){
+						esp32_pin_check_status = -1;
+						timestamp_gui_checkpin = HAL_GetTick();
+						id_pin_dang_kiem_tra = i;
+						
+						TransmitStringHandlerUART("checkpin\n");
+						
+						status_machine = INSTALL_WAIT_ESP_PROCESS;
+					}
 				}
 				break;
 				
-			case CHO_LENH:
-				All_Servo_Angle(GOCDONG); 
+			case IDLE_WAIT_CMD:
+				OpenAllServo(angle_open); 
 			
-				for (uint8_t i = 0; i < 4; i++) {
+				for (uint8_t i = 0; i < 3; i++) {
 					switch(pin_channels[i].status) {
-						case pin_trong:
-							Channel_SetState(i + 1, STATE_IDLE);
-							kiemTraPinMoiLapVao(i, &(pin_channels[i]));
+						case pin_empty:
+							SetStateChannelBattery(i + 1, STATE_IDLE);
+							if(pin_channels[i].data_pin.voltage > threshold_pin_empty){
+								esp32_pin_check_status = -1;
+								timestamp_gui_checkpin = HAL_GetTick();
+								id_pin_dang_kiem_tra = i;
+								
+								TransmitStringHandlerUART("checkpin\n");
+								
+								status_machine = INSTALL_WAIT_ESP_PROCESS;
+							}
 							break;
 			
-						case pin_sac:
-							xuLyTrangThaiSac(&(pin_channels[i]));
-							Channel_SetState(i + 1, STATE_CHARGING);
+						case pin_charge:
+							HandlerStateCharge(&(pin_channels[i]));
+							SetStateChannelBattery(i + 1, STATE_CHARGING);
 							break;
 						
-						case pin_qua_nhiet:
-							if(pin_channels[i].temperatures < NGUONGNHIETDO - 5) {
-								pin_channels[i].status = pin_sac;
+						case pin_over_heat:
+							if(pin_channels[i].temperatures < threshold_temperature - 5) {
+								pin_channels[i].status = pin_charge;
 							}
-							Channel_SetState(i + 1, STATE_IDLE);
+							SetStateChannelBattery(i + 1, STATE_IDLE);
 							break;
 							
-						case pin_day:
-						case pin_loi:
-							if(pin_channels[i].data_pin.voltage < NGUONGPINTRONG) {
-								pin_channels[i].status = pin_trong;
+						case pin_full:
+						case pin_error:
+							if(pin_channels[i].data_pin.voltage < threshold_pin_empty) {
+								pin_channels[i].status = pin_empty;
 							}
-							Channel_SetState(i + 1, STATE_IDLE);
+							SetStateChannelBattery(i + 1, STATE_IDLE);
 							break;
 			
 						default:
@@ -471,97 +452,150 @@ int main(void)
 				}
 			break;
 				
-			case LAY_PIN_CHO_THAO:
-					Servo_SetAngle(fit_pin_thao + 1, GOCMO);
-					Channel_SetState(fit_pin_thao + 1, STATE_IDLE);
+			case WAIT_BATTERY_REMOVAL:
+					SetAngleServo(fit_pin_remove + 1, angle_open);
+					SetStateChannelBattery(fit_pin_remove + 1, STATE_IDLE);
 			
-					if (pin_channels[fit_pin_thao].data_pin.voltage < NGUONGPINTRONG) {
-							pin_channels[fit_pin_thao].status = pin_trong;
-							Servo_SetAngle(fit_pin_thao + 1, GOCDONG); 
-							fit_pin_thao = 5; 
-							status_machine = CHO_LENH; 
+					if (pin_channels[fit_pin_remove].data_pin.voltage < threshold_pin_empty) {
+							pin_channels[fit_pin_remove].status = pin_empty;
+							SetAngleServo(fit_pin_remove + 1, angle_close); 
+							fit_pin_remove = 4; 
+							status_machine = IDLE_WAIT_CMD; 
 					}
 					break;
 
-			case DOI_PIN_CHO_LAP_VAO:
-					for(uint8_t i = 0; i < 4; i++)
+			case SWAP_WAIT_INSERTION:
+					for(uint8_t i = 0; i < 3; i++)
 					{
-						if(i == fit_pin_lap){
-							Servo_SetAngle(fit_pin_lap + 1, GOCMO);
+						if(i == fit_pin_initial){
+							SetAngleServo(fit_pin_initial + 1, angle_open);
 						}
 						else{
-							Servo_SetAngle(i + 1, GOCDONG);
+							SetAngleServo(i + 1, angle_close);
 						}
 					}
 					
-					if (pin_channels[fit_pin_lap].data_pin.voltage > NGUONGPINTRONG) {
-							status_machine = DOI_PIN_DANG_KIEM_TRA; 
-					}
-					break;
-			
-			case DOI_PIN_DANG_KIEM_TRA:
-					kiemTraPinMoiLapVao(fit_pin_lap, &pin_channels[fit_pin_lap]);
-					if (pin_channels[fit_pin_lap].status == pin_sac || pin_channels[fit_pin_lap].status == pin_day) {
-							Servo_SetAngle(fit_pin_lap + 1, GOCDONG);
-							status_machine = DOI_PIN_CHO_THAO_RA; 
-					}
-					
-					if(pin_channels[fit_pin_lap].status == pin_loi){
-							if(pin_channels[fit_pin_lap].data_pin.voltage < NGUONGPINTRONG)
-								pin_channels[fit_pin_lap].status = pin_trong;
-					}
-
-					else if (pin_channels[fit_pin_lap].status == pin_loi) {
-							status_machine = DOI_PIN_CHO_LAP_VAO; 
-					}
-					break;
-
-			case DOI_PIN_CHO_THAO_RA:
-					for(uint8_t i = 0; i < 4; i++)
-					{
-						if(i == fit_pin_thao){
-							Servo_SetAngle(fit_pin_thao + 1, GOCMO);
-						}
-						else{
-							Servo_SetAngle(i + 1, GOCDONG);
-						}
-					}
-					Channel_SetState(fit_pin_thao + 1, STATE_IDLE);
-					
-					if (pin_channels[fit_pin_thao].data_pin.voltage < NGUONGPINTRONG) {
-							pin_channels[fit_pin_thao].status = pin_trong;
-							Servo_SetAngle(fit_pin_thao + 1, GOCDONG); 
+					if (pin_channels[fit_pin_initial].data_pin.voltage > threshold_pin_empty) {
+							esp32_pin_check_status = -1;
+							timestamp_gui_checkpin = HAL_GetTick();
+							
+							TransmitStringHandlerUART("checkpin\n"); 
 						
-							fit_pin_thao = 5;
-							fit_pin_lap = 5;
-							status_machine = CHO_LENH;
+							status_machine = SWAP_WAIT_ESP_PROCESS;
 					}
 					break;
+
+			case SWAP_WAIT_REMOVAL:
+					for(uint8_t i = 0; i < 3; i++)
+					{
+						if(i == fit_pin_remove){
+							SetAngleServo(fit_pin_remove + 1, angle_open);
+						}
+						else{
+							SetAngleServo(i + 1, angle_close);
+						}
+					}
+					SetStateChannelBattery(fit_pin_remove + 1, STATE_IDLE);
+					
+					if (pin_channels[fit_pin_remove].data_pin.voltage < threshold_pin_empty) {
+							pin_channels[fit_pin_remove].status = pin_empty;
+							SetAngleServo(fit_pin_remove + 1, angle_close); 
+						
+							fit_pin_remove = 4;
+							fit_pin_initial = 4;
+							status_machine = IDLE_WAIT_CMD;
+					}
+					break;
+					
+			case INSTALL_WAIT_ESP_PROCESS:					
+				if (esp32_pin_check_status == 1) {
+						CheckPinNewInitial(id_pin_dang_kiem_tra, &pin_channels[id_pin_dang_kiem_tra]);
+						
+						if (pin_channels[id_pin_dang_kiem_tra].status == pin_charge || pin_channels[id_pin_dang_kiem_tra].status == pin_full) {
+								CloseAllServo(angle_close);
+								status_machine = IDLE_WAIT_CMD;
+						} else {
+								status_machine = INSTALL_ERROR_REMOVAL;
+						}
+						esp32_pin_check_status = -1;
+				}
+				else if (esp32_pin_check_status == 0) {
+						status_machine = INSTALL_ERROR_REMOVAL;
+						esp32_pin_check_status = -1; 
+				}
+				else if (HAL_GetTick() - timestamp_gui_checkpin > ESP32_CHECK_TIMEOUT) {
+						status_machine = INSTALL_ERROR_REMOVAL;
+						esp32_pin_check_status = -1;
+				}
+				break;
+
+			case INSTALL_ERROR_REMOVAL:
+				SetAngleServo(id_pin_dang_kiem_tra + 1, angle_open);
+				
+				if (pin_channels[id_pin_dang_kiem_tra].data_pin.voltage < threshold_pin_empty) {
+						pin_channels[id_pin_dang_kiem_tra].status = pin_empty;
+						id_pin_dang_kiem_tra = 4;
+						status_machine = INSTALL_BATTERY; 
+				}
+				break;
+
+			case SWAP_WAIT_ESP_PROCESS:
+				if (esp32_pin_check_status == 1) {
+						CheckPinNewInitial(fit_pin_initial, &pin_channels[fit_pin_initial]);
+
+						if (pin_channels[fit_pin_initial].status == pin_charge || pin_channels[fit_pin_initial].status == pin_full) {
+								SetAngleServo(fit_pin_initial + 1, angle_close);
+								status_machine = SWAP_WAIT_REMOVAL;
+						} else {
+								status_machine = SWAP_WAIT_REMOVAL;
+						}
+						esp32_pin_check_status = -1;
+				}
+				else if (esp32_pin_check_status == 0) {
+						status_machine = SWAP_WAIT_REMOVAL;
+						esp32_pin_check_status = -1;
+				}
+				else if (HAL_GetTick() - timestamp_gui_checkpin > ESP32_CHECK_TIMEOUT) {
+						status_machine = SWAP_WAIT_REMOVAL;
+						esp32_pin_check_status = -1;
+				}
+				break;
+
+			case SWAP_ERROR_REMOVAL:
+				SetAngleServo(fit_pin_initial + 1, angle_open);
+				
+				if (pin_channels[fit_pin_initial].data_pin.voltage < threshold_pin_empty) {
+						pin_channels[fit_pin_initial].status = pin_empty;
+						status_machine = SWAP_WAIT_INSERTION;
+				}
+				break;	
 		}
 			
-		for (uint8_t i = 0; i < 4; i++) {
-			if (pin_channels[i].status == pin_sac && HAL_GetTick() - pin_channels[i].last_check_percent >= 300000) {
-					Channel_SetState(i + 1, STATE_IDLE); // Ngắt sạc
+		for (uint8_t i = 0; i < 3; i++) {
+			if (pin_channels[i].status == pin_charge && HAL_GetTick() - pin_channels[i].last_check_percent >= 300000) {
+					SetStateChannelBattery(i + 1, STATE_IDLE); // Ngắt sạc
 					HAL_Delay(100);
-					pin_channels[i].data_pin = INA219_Manager_Read(i + 1);
+					pin_channels[i].data_pin = ReadManagerINA219(i + 1);
 					pin_channels[i].last_check_percent = HAL_GetTick();
 					pin_channels[i].check_percent_pin = 1;
-					Channel_SetState(i + 1, STATE_CHARGING); // Bật sạc lại
+					SetStateChannelBattery(i + 1, STATE_CHARGING); // Bật sạc lại
 			}
 		}
-
-		
+//		float temperatures[4];
+//		INA219_Data_t data_pin[4];
+//		  
+//		SetStateChannelBattery(4, STATE_CHARGING);
 //    if (HAL_GetTick() - last_sensor_update_tick >= 1000) 
 //		{  
 //    last_sensor_update_tick = HAL_GetTick();
 //    for(uint8_t i = 0; i < 4; i++) {
-//      //  temperatures[i] = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
-//      //  data_pin[i] = INA219_Manager_Read(i + 1);
+//        temperatures[i] = NTC_GetTemperature(&hadc1, ADC_Channel[i]);
+//        data_pin[i] = INA219_Manager_Read(i + 1);
 //        
 //        char data_transmit[100];
-//   //     sprintf(data_transmit, "DATA%d: V=%.2f, C=%.2fmA, T=%.1f\r\n", 
-//  //              i+1, data_pin[i].voltage, data_pin[i].current, temperatures[i]);
-//        UART_Handler_TransmitString(data_transmit);
+//        sprintf(data_transmit, "DATA%d: V=%.2f, C=%.2fmA, T=%.1f\r\n", 
+//                i+1, data_pin[i].voltage, data_pin[i].current, temperatures[i]);
+//        TransmitStringHandlerUART(data_transmit);
 //    }
 //		}  /* USER CODE END 3 */
 	}

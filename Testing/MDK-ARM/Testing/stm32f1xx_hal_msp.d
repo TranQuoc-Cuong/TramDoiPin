@@ -31,3 +31,6 @@ testing\stm32f1xx_hal_msp.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_p
 testing\stm32f1xx_hal_msp.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\stm32f1xx_hal_msp.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\stm32f1xx_hal_msp.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+testing\stm32f1xx_hal_msp.o: ../Drivers/INA219/ina219_manager.h
+testing\stm32f1xx_hal_msp.o: ../Drivers/INA219/INA219.h
+testing\stm32f1xx_hal_msp.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h

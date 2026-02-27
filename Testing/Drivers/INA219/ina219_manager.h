@@ -1,20 +1,18 @@
 #ifndef INC_INA219_MANAGER_H_
 #define INC_INA219_MANAGER_H_
 
-#include "main.h"
 #include "INA219.h"
 
-
 typedef struct {
-    float voltage;
-    float current;
-    float power;
-		float soc_percent;
-		enum BatteryState state; 
-} INA219_Data_t;
+	float voltage;
+	float current;
+	float power;
+	float soc_percent;
+	enum BatteryState state; 
+} INA219Data;
 
-uint8_t INA219_Manager_Init(I2C_HandleTypeDef* hi2c);
-
-INA219_Data_t INA219_Manager_Read(uint8_t sensor_id);
+void SetAddressManagerINA219(uint8_t id, uint8_t address);
+uint8_t InitManagerINA219(I2C_HandleTypeDef* hi2c);
+INA219Data ReadManagerINA219(uint8_t sensor_id);
 
 #endif // INC_INA219_MANAGER_H_ 

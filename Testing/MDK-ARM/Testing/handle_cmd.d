@@ -33,6 +33,11 @@ testing\handle_cmd.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 testing\handle_cmd.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\handle_cmd.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\handle_cmd.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
-testing\handle_cmd.o: ../Drivers/SERVO/servo_control.h
-testing\handle_cmd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+testing\handle_cmd.o: ../Drivers/INA219/ina219_manager.h
+testing\handle_cmd.o: ../Drivers/INA219/INA219.h
+testing\handle_cmd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 testing\handle_cmd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+testing\handle_cmd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+testing\handle_cmd.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
+testing\handle_cmd.o: ../Drivers/SERVO/servo_control.h
+testing\handle_cmd.o: ../Drivers/UART/uart_dn.h

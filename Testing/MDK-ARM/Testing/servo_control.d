@@ -32,3 +32,7 @@ testing\servo_control.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 testing\servo_control.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\servo_control.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\servo_control.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+testing\servo_control.o: ../Drivers/INA219/ina219_manager.h
+testing\servo_control.o: ../Drivers/INA219/INA219.h
+testing\servo_control.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
+testing\servo_control.o: ..\Drivers\DELAY\soft_timer.h

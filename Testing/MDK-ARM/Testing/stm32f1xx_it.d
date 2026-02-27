@@ -31,4 +31,7 @@ testing\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 testing\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\stm32f1xx_it.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+testing\stm32f1xx_it.o: ../Drivers/INA219/ina219_manager.h
+testing\stm32f1xx_it.o: ../Drivers/INA219/INA219.h
+testing\stm32f1xx_it.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 testing\stm32f1xx_it.o: ../Core/Inc/stm32f1xx_it.h

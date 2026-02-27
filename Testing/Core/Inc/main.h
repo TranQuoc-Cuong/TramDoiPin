@@ -31,12 +31,45 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "ina219_manager.h"
 
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+typedef enum{
+	pin_empty,
+	pin_charge,
+	pin_full,
+	pin_over_heat,
+	pin_error
+} StatusChannel;
 
+typedef enum {
+	INSTALL_BATTERY,
+	ALL_SLOTS_EMPTY,
+	IDLE_WAIT_CMD,
+	
+	WAIT_BATTERY_REMOVAL,
+	
+	SWAP_WAIT_INSERTION,
+	SWAP_WAIT_ESP_PROCESS,         
+	SWAP_ERROR_REMOVAL,     
+	SWAP_WAIT_REMOVAL,
+	
+	INSTALL_WAIT_ESP_PROCESS,          
+	INSTALL_ERROR_REMOVAL     
+} SystemState;
+
+typedef	struct{
+	INA219Data       data_pin;
+	float            temperatures; 
+	StatusChannel    status;
+	uint8_t          charge_done_counter;
+	uint32_t         charge_done_timestamp;
+	uint8_t          check_percent_pin;
+	uint32_t         last_check_percent;
+} PinChannel;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

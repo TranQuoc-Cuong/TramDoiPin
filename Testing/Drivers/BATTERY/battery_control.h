@@ -3,18 +3,31 @@
 
 #include "main.h"
 
-// Định nghĩa 3 trạng thái bạn yêu cầu
-typedef enum {
-    STATE_IDLE,      // Trạng thái 1: Tắt sạc, Tắt tải
-    STATE_CHARGING,  // Trạng thái 2: Bật sạc, Tắt tải
-    STATE_TESTING    // Trạng thái 3: Tắt sạc, Bật tải
-} ChannelState_t;
+#define MAX_CHANNEL_BATTERY 3 
 
-// Khai báo hàm để main.c có thể gọi
-void Channel_SetState(uint8_t channel_id, ChannelState_t new_state);
-void Channels_SetAll_Idle(void);
-void Channels_SetAll_Charge(void);
-void Channels_SetAll_Testing(void);
-void Channels_SetAll(ChannelState_t trangThai_pin1, ChannelState_t trangThai_pin2, ChannelState_t trangThai_pin3, ChannelState_t trangThai_pin4);
+typedef enum {
+	STATE_IDLE,      
+	STATE_CHARGING,  
+	STATE_TESTING    
+} ChannelState;
+
+typedef struct {
+	GPIO_TypeDef*  gpio_port_charge;
+	uint16_t       gpio_pin_charge;
+	
+	GPIO_TypeDef*  gpio_port_load;
+	uint16_t       gpio_pin_load;
+	
+	ChannelState   state;
+	uint8_t        is_initialized;
+} BatteryChannel;
+
+void InitChannelBattery(uint8_t id, GPIO_TypeDef* port_charge, uint16_t pin_charge, 
+																		GPIO_TypeDef* port_load, uint16_t pin_load);
+void SetStateChannelBattery(uint8_t id, ChannelState state);
+void SetIdleAllChannelBattery(void);
+void SetChargeAllChannelBattery(void);
+void SetLoadAllChannelBattery(void);
+void SetAllStateChannelBattery(ChannelState state_1, ChannelState state_2, ChannelState state_3);
 
 #endif /* INC_BATTERY_CONTROL_H_ */

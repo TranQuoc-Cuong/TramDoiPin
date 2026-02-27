@@ -1,6 +1,7 @@
 testing\ina219_manager.o: ..\Drivers\INA219\ina219_manager.c
 testing\ina219_manager.o: ..\Drivers\INA219\ina219_manager.h
-testing\ina219_manager.o: ../Core/Inc/main.h
+testing\ina219_manager.o: ..\Drivers\INA219\INA219.h
+testing\ina219_manager.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 testing\ina219_manager.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h
 testing\ina219_manager.o: ../Core/Inc/stm32f1xx_hal_conf.h
 testing\ina219_manager.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_rcc.h
@@ -32,5 +33,4 @@ testing\ina219_manager.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.
 testing\ina219_manager.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\ina219_manager.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\ina219_manager.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
-testing\ina219_manager.o: ..\Drivers\INA219\INA219.h
-testing\ina219_manager.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
+testing\ina219_manager.o: ../Core/Inc/main.h

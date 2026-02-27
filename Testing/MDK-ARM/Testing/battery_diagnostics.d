@@ -1,5 +1,8 @@
 testing\battery_diagnostics.o: ..\Services\battery_diagnostics.c
 testing\battery_diagnostics.o: ..\Services\battery_diagnostics.h
+testing\battery_diagnostics.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+testing\battery_diagnostics.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h
+testing\battery_diagnostics.o: ../Drivers/BATTERY/battery_control.h
 testing\battery_diagnostics.o: ../Core/Inc/main.h
 testing\battery_diagnostics.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal.h
 testing\battery_diagnostics.o: ../Core/Inc/stm32f1xx_hal_conf.h
@@ -8,7 +11,6 @@ testing\battery_diagnostics.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal
 testing\battery_diagnostics.o: ../Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f1xx.h
 testing\battery_diagnostics.o: ../Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xb.h
 testing\battery_diagnostics.o: ../Drivers/CMSIS/Include/core_cm3.h
-testing\battery_diagnostics.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
 testing\battery_diagnostics.o: ../Drivers/CMSIS/Include/cmsis_version.h
 testing\battery_diagnostics.o: ../Drivers/CMSIS/Include/cmsis_compiler.h
 testing\battery_diagnostics.o: ../Drivers/CMSIS/Include/cmsis_armcc.h
@@ -35,4 +37,5 @@ testing\battery_diagnostics.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal
 testing\battery_diagnostics.o: ../Drivers/INA219/ina219_manager.h
 testing\battery_diagnostics.o: ../Drivers/INA219/INA219.h
 testing\battery_diagnostics.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
-testing\battery_diagnostics.o: ../Drivers/BATTERY/battery_control.h
+testing\battery_diagnostics.o: ..\Drivers\DELAY\soft_timer.h
+testing\battery_diagnostics.o: ../Drivers/SERVO/servo_control.h

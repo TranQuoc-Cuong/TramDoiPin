@@ -32,4 +32,7 @@ testing\ntc_sensor.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 testing\ntc_sensor.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\ntc_sensor.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\ntc_sensor.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+testing\ntc_sensor.o: ../Drivers/INA219/ina219_manager.h
+testing\ntc_sensor.o: ../Drivers/INA219/INA219.h
+testing\ntc_sensor.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 testing\ntc_sensor.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\math.h

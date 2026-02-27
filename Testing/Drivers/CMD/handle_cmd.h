@@ -1,10 +1,15 @@
+#ifndef HANDLE_CMD_H_
+#define HANDLE_CMD_H_
+
 #include "battery_control.h"
-#include "servo_control.h"
-#include <string.h>
-#include <stdlib.h> 
 
-void CMD_ParseSimple(char* args, ChannelState_t state);
+typedef void (*CmdHandler)(char *args);
 
-void CMD_ParseServo(char* args);
+typedef struct {
+	const char *cmd_name;  
+	CmdHandler handler;  
+} CommandEntry;
 
-void CMD_Process(char* command_buffer);
+void CMDProcessAll(char *full_command);
+
+#endif /* HANDLE_CMD_H_ */

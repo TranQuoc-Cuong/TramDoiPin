@@ -32,6 +32,8 @@ testing\uart_dn.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h
 testing\uart_dn.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h
 testing\uart_dn.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim_ex.h
 testing\uart_dn.o: ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_uart.h
+testing\uart_dn.o: ../Drivers/INA219/ina219_manager.h
+testing\uart_dn.o: ../Drivers/INA219/INA219.h
 testing\uart_dn.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
-testing\uart_dn.o: ../Drivers/RINGBUFFER/ringbuffer.h
 testing\uart_dn.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+testing\uart_dn.o: ../Drivers/RINGBUFFER/ringbuffer.h

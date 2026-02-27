@@ -3,11 +3,16 @@
 
 #include "main.h"
 
-void Servos_Init(TIM_HandleTypeDef *htim);
+typedef struct {
+	TIM_HandleTypeDef* htim;
+	uint32_t           channel;
+	uint8_t            is_initialized;
+} ServoConfig;
 
-void Servo_SetAngle(uint8_t servo_id, uint8_t angle);
-
-void All_Servo_Angle(uint8_t angle);
-
+void InitServo(uint8_t servo_id, TIM_HandleTypeDef* htim, uint32_t channel);
+void SetAngleServo(uint8_t servo_id, uint8_t angle);
+void OpenAllServo(uint8_t angle);
+void CloseAllServo(uint8_t angle);
+void RunManagerServo(void);
 
 #endif // INC_SERVO_CONTROL_H_H
